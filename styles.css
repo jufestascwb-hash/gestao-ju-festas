@@ -194,3 +194,13 @@ h2.sec::before{content:"";width:26px;height:26px;flex:none;background:url(img/la
   .abas{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:4px}
   .aba{font-size:13px;padding:8px 6px;text-align:center;white-space:normal;line-height:1.15;background:#fff;border:1px solid var(--borda)}
 }
+
+/* abas numa linha só no computador */
+@media(min-width:700px){
+  .abas{flex-wrap:wrap;justify-content:space-between;gap:2px}
+  .aba{font-size:13.5px;padding:8px 10px}
+}
+@media(min-width:700px) and (max-width:999px){
+  .abas{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+  .aba{text-align:center}
+}
