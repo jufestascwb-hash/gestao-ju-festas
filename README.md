@@ -17,6 +17,16 @@ Ferramenta de gestão da Jú Festas e Presentes, para presentes personalizados. 
 | Relatórios | Vendas por mês, mais vendidos, margem por produto, ticket médio, recompra e origem das clientes |
 | Ajustes | Percentuais do markup, valor da hora, capacidade, MEI, datas comerciais, modelos de mensagem e cópia de segurança |
 
+## Nota fiscal do MEI
+
+Cada pedido tem um bloco **Nota fiscal**. Ele marca sozinho quando a nota é obrigatória (cliente com CNPJ, ou orçamento de empresa com nota) e deixa você ligar a nota em qualquer outro pedido.
+
+1. **Copiar dados da nota** junta cliente, CPF ou CNPJ, endereço, itens com NCM, frete, total, CFOP e regime.
+2. **Abrir o emissor** leva ao portal oficial: Receita/PR (NF-e avulsa, para produtos) ou Emissor Nacional (NFS-e, para serviços).
+3. Depois de emitir, anote o número e a data. A nota aparece em **Hoje**, no **Financeiro** e na planilha de pedidos.
+
+Em **Ajustes > Nota fiscal** ficam o tipo de nota mais comum, o CFOP padrão, um link de emissor próprio e a opção de emitir nota em todas as vendas (para usar a partir de 2027, quando a lei prevê nota em toda venda do MEI). NCM e CFOP são sugestões: confirme com o seu contador.
+
 ## Identidade da marca
 
 A ferramenta usa o logo, o laço, o coração e as figurinhas oficiais da Jú (pasta `img/fig`). A mascote aparece nas telas vazias, nos avisos e comemora quando um pagamento é confirmado, um pedido fica pronto ou é entregue. Em **Ajustes > Figurinhas da Jú** dá para baixar cada figurinha e enviar no WhatsApp. No pedido entregue, o bloco **Pós-venda com carinho** junta as figurinhas de agradecimento, avaliação no Google e indicação com a mensagem pronta.

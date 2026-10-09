@@ -6,7 +6,7 @@ const CHAVE = 'jf-gestao-v1';
 const ET = [['novo','Novo'],['pagamento','Aguardando pagamento'],['arte','Arte em aprovação'],['producao','Em produção'],['pronto','Pronto para entrega'],['entregue','Entregue'],['cancelado','Cancelado']];
 const ABERTO = s => s !== 'entregue' && s !== 'cancelado';
 const TECNICAS = ['Sublimação','DTF UV','Recorte Silhouette','Montagem','Outra'];
-const CATS = {datas:'Datas e aniversários', casamento:'Casamento e padrinhos', lembrancinhas:'Lembrancinhas', empresas:'Para empresas'};
+const CATS = {datas:'Datas e aniversários', baloes:'Balões personalizados', buques:'Buquês de chocolates', casamento:'Casamento e padrinhos', lembrancinhas:'Lembrancinhas', empresas:'Para empresas'};
 const CAT_SAIDA = ['Insumos','Embalagens','Entrega','Taxas de pagamento','Equipamentos','Marketing','Impostos (DAS)','Outros'];
 const FORMAS = ['Pix','Cartão de crédito','Cartão de débito','Dinheiro','Transferência'];
 const ORIGENS = ['','Instagram','Indicação','WhatsApp','Catálogo','Empresa','Outro'];
@@ -59,7 +59,7 @@ function proxDDMM(ddmm) { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(String(ddmm ||
 /* ---------- dados ---------- */
 function base() {
   return {v:1, exemplo:false, criado:new Date().toISOString(),
-    config:{nomeLoja:'Jú Festas e Presentes', whats:'', linkGoogle:'', fixas:15, taxas:5, lucro:30, hora:25, capacidade:20, das:0, limiteMei:81000, prefixo:'JF'},
+    config:{nomeLoja:'Jú Festas e Presentes', whats:'', linkGoogle:'', fixas:15, taxas:5, lucro:30, hora:25, capacidade:20, das:0, limiteMei:81000, prefixo:'JF', nfTipo:'produto', nfLink:'', nfCfop:'5101', nfTodas:false},
     modelos:JSON.parse(JSON.stringify(MODELOS_PADRAO)), datas:DATAS_PADRAO.map(d => ({...d})),
     produtos:[], insumos:[], clientes:[], pedidos:[], lancamentos:[], orcamentos:[]};
 }
@@ -131,6 +131,55 @@ function zap(c, t, rot, k) {
   return `<a class="btn zap" target="_blank" rel="noopener" data-act="registrar-envio" data-cli="${c.id || ''}" data-mod="${k || ''}" href="https://wa.me/${waNum(w)}?text=${encodeURIComponent(t)}">${esc(rot || 'WhatsApp')}</a>`;
 }
 
+/* ---------- NOTA FISCAL (MEI) ---------- */
+const EMISSORES = {
+  produto:['Nota de produto (NF-e avulsa) na Receita/PR', 'https://receita.pr.gov.br/', 'Entre com o seu login da Receita/PR e vá em Nota Fiscal Avulsa Eletrônica (NFA-e). Não precisa de certificado digital.'],
+  servico:['Nota de serviço (NFS-e) no Emissor Nacional', 'https://www.nfse.gov.br/EmissorNacional', 'Entre com a conta gov.br. Também dá para emitir pelo aplicativo NFS-e Mobile.']
+};
+const docLimpo = d => String(d || '').replace(/\D/g, '');
+const docTxt = d => { const x = docLimpo(d); return x.length === 11 ? x.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : x.length === 14 ? x.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : String(d || ''); };
+const ehPJ = c => !!c && docLimpo(c.doc).length === 14;
+function nfDe(o) {
+  const c = cli(o.cliente), n = o.nf || {};
+  const auto = ehPJ(c) || !!C().nfTodas || /nota fiscal/i.test(o.obs || '');
+  return {status:'pendente', numero:'', data:'', tipo:C().nfTipo || 'produto', ...n, precisa:n.precisa !== undefined ? n.precisa : auto, auto};
+}
+const nfPronta = o => o.status !== 'cancelado' && (saldoPedido(o) === 0 || o.status === 'entregue');
+const nfPendente = o => { const n = nfDe(o); return o.status !== 'cancelado' && n.precisa && n.status === 'pendente'; };
+const emissor = tipo => [EMISSORES[tipo] ? EMISSORES[tipo][0] : EMISSORES.produto[0], (C().nfLink || '').trim() || (EMISSORES[tipo] || EMISSORES.produto)[1], (EMISSORES[tipo] || EMISSORES.produto)[2]];
+function dadosNF(o) {
+  const c = cli(o.cliente) || {}, n = nfDe(o), cf = String(C().nfCfop || '5101'), fora = cf.replace(/^5/, '6');
+  const itens = (o.itens || []).map((it, k) => { const p = prod(it.produto) || {}; return `${k + 1}. ${it.nome || p.nome || 'item'}${p.ncm ? ' · NCM ' + p.ncm : ''} · ${numTxt(num(it.qtd)) || 1} un. × ${brl(num(it.preco))} = ${brl(num(it.qtd) * num(it.preco))}`; }).join('\n');
+  const L = [`DADOS PARA A NOTA FISCAL · pedido ${o.codigo}`, '',
+    `Cliente: ${c.nome || '(cadastre a cliente)'}`, `${ehPJ(c) ? 'CNPJ' : 'CPF/CNPJ'}: ${docTxt(c.doc) || '(falta informar)'}`, `Endereço: ${c.endereco || '(falta informar)'}`, '',
+    n.tipo === 'servico' ? 'Serviço prestado:' : 'Produtos:', itens];
+  if (num(o.frete)) L.push(`Frete: ${brl(o.frete)}`);
+  if (num(o.desconto)) L.push(`Desconto: ${brl(o.desconto)}`);
+  L.push(`Valor total: ${brl(totalPedido(o))}`, '');
+  if (n.tipo === 'servico') L.push('No Emissor Nacional, escolha o código de tributação do serviço que você presta.');
+  else L.push('Natureza da operação: Venda de produção do estabelecimento', `CFOP: ${cf} (cliente no Paraná) ou ${fora} (cliente de outro estado)`, 'Regime: MEI · CSOSN 102');
+  L.push(`Informações complementares: Pedido ${o.codigo}.`);
+  return L.join('\n');
+}
+function blocoNF(o) {
+  const n = nfDe(o), c = cli(o.cliente), [nome, link, dica] = emissor(n.tipo), falta = [];
+  if (n.precisa && n.status === 'pendente') { if (!c || !docLimpo(c.doc)) falta.push('CPF ou CNPJ da cliente'); if (!c || !String(c.endereco || '').trim()) falta.push('endereço da cliente'); }
+  const porque = ehPJ(c) ? 'Cliente empresa (CNPJ): a nota é obrigatória.' : C().nfTodas ? 'Você marcou em Ajustes para emitir nota em todas as vendas.' : 'Cliente pessoa física: em 2026 a nota é emitida quando ela pede. A partir de 2027, a lei prevê nota em todas as vendas do MEI.';
+  const tag = !n.precisa ? '<span class="tag">sem nota</span>' : n.status === 'emitida' ? '<span class="tag ok">emitida</span>' : n.status === 'dispensada' ? '<span class="tag">dispensada</span>' : `<span class="tag ${nfPronta(o) ? 'alerta' : ''}">${nfPronta(o) ? 'emitir agora' : 'emitir após o pagamento'}</span>`;
+  let corpo = `<label class="opc"><span>Emitir nota fiscal para este pedido</span><input type="checkbox" data-act-change="nf-precisa" data-id="${o.id}" ${n.precisa ? 'checked' : ''}></label><div class="info">${porque}</div>`;
+  if (n.precisa && n.status === 'pendente') corpo += `
+    <div class="duas">${campo('Tipo de nota', `<select data-act-change="nf-tipo" data-id="${o.id}">${opts([['produto','Produto (NF-e)'],['servico','Serviço (NFS-e)']], n.tipo)}</select>`)}<div class="info" style="align-self:end">${esc(dica)}</div></div>
+    ${falta.length ? `<div class="alerta-nf">Falta ${falta.join(' e ')}. ${c ? `<button class="link" data-act="editar-cliente" data-id="${c.id}">Completar cadastro</button>` : ''}</div>` : ''}
+    <div class="nf-passos"><b>1.</b> Copie os dados <b>2.</b> Abra o emissor e preencha <b>3.</b> Anote o número aqui</div>
+    <div class="acoes"><button class="btn" data-act="nf-copiar" data-id="${o.id}">Copiar dados da nota</button><a class="btn forte" href="${esc(link)}" target="_blank" rel="noopener">Abrir: ${esc(nome)}</a></div>
+    <details class="nf-ver"><summary>Ver os dados</summary><pre>${esc(dadosNF(o))}</pre></details>
+    <div class="tres">${campo('Número da nota', `<input type="text" id="nf-num" inputmode="numeric" maxlength="20">`)}${campo('Data de emissão', `<input type="date" id="nf-data" value="${hoje()}">`)}<button class="btn forte" data-act="nf-emitida" data-id="${o.id}" style="align-self:end">Marcar como emitida</button></div>
+    ${ehPJ(c) ? '' : `<button class="link" data-act="nf-dispensar" data-id="${o.id}">A cliente não precisa de nota</button>`}`;
+  else if (n.precisa && n.status === 'emitida') corpo += `<div class="lin0"><span>Nota nº <b>${esc(n.numero)}</b> emitida em ${br(n.data)} · ${n.tipo === 'servico' ? 'serviço' : 'produto'}</span><span>${c ? zap(c, 'Oi, ' + primeiro(c.nome) + '! Emiti a nota fiscal do seu pedido ' + o.codigo + ' (nº ' + n.numero + '). Te envio o arquivo aqui.', 'Avisar a cliente') : ''} ${confirmarBtn('nf-desfazer', o.id, 'Desfazer')}</span></div>`;
+  else if (n.precisa && n.status === 'dispensada') corpo += `<div class="lin0"><span>Marcada como dispensada.</span>${confirmarBtn('nf-desfazer', o.id, 'Desfazer')}</div>`;
+  return `<div class="bloco"><header><b>Nota fiscal</b>${tag}</header><div class="dentro">${corpo}</div></div>`;
+}
+
 /* ---------- estado da tela ---------- */
 const S = {aba:'hoje', view:'lista', id:null, edit:null, filtro:'abertos', busca:'', mes:hoje().slice(0,7), msg:'', imp:'', confirmar:null, cliMsg:''};
 let app;
@@ -197,6 +246,7 @@ function telaHoje() {
   const alerta = atrasados.length ? `<div class="alerta-ju">${mascote('oque', `<b>${atrasados.length === 1 ? 'Tem 1 pedido' : 'Tem ' + atrasados.length + ' pedidos'} com entrega atrasada!</b><span>${atrasados.map(o => `<button class="link" data-act="ver-pedido" data-id="${o.id}">${esc(o.codigo)} · ${esc((cli(o.cliente) || {}).nome || '')} · ${br(o.entrega)}</button>`).join('<br>')}</span>`)}</div>` : '';
   return `${topo}${alerta}<div class="kpis">${kpi('Pedidos em aberto', ab.length)}${kpi('A receber', brl(receber))}${kpi('Entregas em 7 dias', sem.length)}${kpi('Resultado do mês', brl(ent - sai), 'entradas ' + brl(ent) + ' · saídas ' + brl(sai))}</div>
   ${camp.length ? `<div class="bloco campanha"><img class="canto" src="img/fig/lembra.webp" alt="${FIG.lembra}"><header><b>Campanhas</b><span>regra: abre 14 dias antes, reforça 7, último dia de pedido 3</span></header>${camp.map(d => `<div class="lin"><span><b>${esc(d.nome)}</b> · ${br(d.data)} · ${d.n === 0 ? 'é hoje' : 'faltam ' + d.n + ' dias'}</span><span class="tag ${d.n <= 3 ? 'alerta' : ''}">${fase(d.n)}</span></div>`).join('')}</div>` : ''}
+  ${(() => { const nf = D.pedidos.filter(o => nfPendente(o) && nfPronta(o)); return nf.length ? `<div class="bloco"><header><b>Notas fiscais a emitir</b><span>pedidos pagos ou entregues</span></header>${nf.map(o => `<div class="lin"><span>${esc(o.codigo)} · ${esc((cli(o.cliente) || {}).nome || 'Cliente')} · ${brl(totalPedido(o))}</span><button class="link" data-act="ver-pedido" data-id="${o.id}">Emitir nota</button></div>`).join('')}</div>` : ''; })()}
   <h2 class="sec">Entregas dos próximos 7 dias</h2>${sem.length ? sem.map(cartaoPedido).join('') : '<div class="vazio">Nenhuma entrega marcada para esta semana.</div>'}
   ${falta.length ? `<div class="bloco"><header><b>Insumos no mínimo ou abaixo</b><button class="link" data-act="aba" data-aba="insumos">Ver lista de compras</button></header>${falta.map(i => `<div class="lin"><span>${esc(i.nome)}</span><span class="tag alerta">${numTxt(num(i.estoque)) || '0'} ${esc(i.unidade)} · mínimo ${numTxt(num(i.minimo))}</span></div>`).join('')}</div>` : ''}
   <h2 class="sec">Relacionamento</h2>
@@ -244,6 +294,7 @@ function telaPedido() {
   <div class="bloco"><header><b>Produção</b><span>${tecnicasPedido(o).join(', ')}</span></header><div class="dentro">
     ${[['arte','Arte aprovada pela cliente'],['separado','Insumos separados'],['produzido','Produzido'],['embalado','Embalado']].map(([k, t]) => `<label class="opc"><span>${t}</span><input type="checkbox" data-act-change="check" data-id="${o.id}" data-k="${k}" ${ck[k] ? 'checked' : ''}></label>`).join('')}
   </div></div>
+  ${blocoNF(o)}
   <div class="bloco"><header><b>Resultado do pedido</b><span>pela ficha técnica</span></header><div class="dentro soma">
     <div><span>Total</span><span>${brl(total)}</span></div><div><span>Custo dos produtos</span><span>− ${brl(custo)}</span></div><div><span>Taxas (${pct(num(C().taxas))})</span><span>− ${brl(taxa)}</span></div><div class="total"><span>Lucro estimado</span><span>${brl(lucro)}</span></div>
   </div></div>
@@ -326,7 +377,7 @@ function telaProducao() {
 }
 
 /* ---------- CLIENTES ---------- */
-function novoCliente() { return {_tipo:'cliente', _novo:true, id:novoId('c'), nome:'', whats:'', bairro:'', endereco:'', origem:'', etiquetas:'', aniversario:'', dataRotulo:'', dataDia:'', obs:'', autorizaFoto:false, aceitaMsg:true, contatos:[], criado:hoje()}; }
+function novoCliente() { return {_tipo:'cliente', _novo:true, id:novoId('c'), nome:'', whats:'', doc:'', bairro:'', endereco:'', origem:'', etiquetas:'', aniversario:'', dataRotulo:'', dataDia:'', obs:'', autorizaFoto:false, aceitaMsg:true, contatos:[], criado:hoje()}; }
 function listaClientes() {
   const q = S.busca.toLowerCase(), qd = q.replace(/\D/g, '');
   const l = D.clientes.filter(c => !q || c.nome.toLowerCase().includes(q) || (qd && String(c.whats).includes(qd)) || (c.bairro || '').toLowerCase().includes(q) || (c.etiquetas || '').toLowerCase().includes(q)).sort((a, b) => a.nome.localeCompare(b.nome));
@@ -339,6 +390,7 @@ function telaCliente() {
   return `<button class="voltar" data-act="aba" data-aba="clientes">‹ Todas as clientes</button>
   <div class="bloco"><div class="dentro"><div class="vtopo"><div><h1>${esc(c.nome)}</h1><div class="info">${esc(fone(c.whats))}${c.bairro ? ' · ' + esc(c.bairro) : ''}${c.origem ? ' · veio por ' + esc(c.origem) : ''}</div></div><div class="dir"><div class="preco">${brl(tot)}</div><small class="info">${pedidosDe(c.id).length} pedidos · ticket ${brl(pedidosDe(c.id).length ? tot / pedidosDe(c.id).length : 0)}</small></div></div>
   <div class="tags">${c.etiquetas ? c.etiquetas.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join('') : ''}<span class="tag ${c.autorizaFoto ? 'ok' : ''}">${c.autorizaFoto ? 'autoriza foto no Instagram' : 'sem autorização de foto'}</span>${c.aceitaMsg === false ? '<span class="tag alerta">não quer receber campanhas</span>' : ''}</div>
+  ${c.doc ? `<div><span class="rotulo">${ehPJ(c) ? 'CNPJ' : 'CPF'}</span><br>${esc(docTxt(c.doc))}</div>` : ''}
   ${c.endereco ? `<div><span class="rotulo">Endereço</span><br>${esc(c.endereco)}</div>` : ''}
   ${c.aniversario || c.dataDia ? `<div><span class="rotulo">Datas</span><br>${c.aniversario ? 'Aniversário em ' + esc(c.aniversario) : ''}${c.aniversario && c.dataDia ? ' · ' : ''}${c.dataDia ? esc(c.dataRotulo || 'Data especial') + ' em ' + esc(c.dataDia) : ''}</div>` : ''}
   ${c.obs ? `<div><span class="rotulo">Anotações</span><br>${esc(c.obs)}</div>` : ''}
@@ -355,7 +407,7 @@ function formCliente() {
   ${campo('Nome', inp('nome', e.nome, 'maxlength="60"'))}
   <div class="duas">${campo('WhatsApp', inp('whats', fone(e.whats), 'inputmode="tel"'), 'com DDD')}${campo('Como chegou', `<select data-f="origem">${opts(ORIGENS, e.origem)}</select>`)}</div>
   <div class="duas">${campo('Bairro ou cidade', inp('bairro', e.bairro, 'maxlength="40"'))}${campo('Etiquetas', inp('etiquetas', e.etiquetas, 'maxlength="80"'), 'separe por vírgula: noiva, empresa')}</div>
-  ${campo('Endereço de entrega', inp('endereco', e.endereco, 'maxlength="140"'), 'opcional')}
+  <div class="duas">${campo('CPF ou CNPJ', inp('doc', docTxt(e.doc), 'inputmode="numeric" maxlength="18"'), 'para a nota fiscal')}${campo('Endereço', inp('endereco', e.endereco, 'maxlength="140"'), 'entrega e nota fiscal')}</div>
   <div class="tres">${campo('Aniversário', inp('aniversario', e.aniversario, 'maxlength="5" placeholder="12/03" inputmode="numeric"'), 'dd/mm')}${campo('Outra data', inp('dataRotulo', e.dataRotulo, 'maxlength="30" placeholder="aniversário da filha"'))}${campo('Dia', inp('dataDia', e.dataDia, 'maxlength="5" inputmode="numeric"'), 'dd/mm')}</div>
   <label class="opc"><span>Autoriza mostrar o produto pronto no Instagram</span><input type="checkbox" data-f="autorizaFoto" ${e.autorizaFoto ? 'checked' : ''}></label>
   <label class="opc"><span>Aceita receber mensagens de campanhas</span><input type="checkbox" data-f="aceitaMsg" ${e.aceitaMsg !== false ? 'checked' : ''}></label>
@@ -366,7 +418,8 @@ function salvarCliente() {
   const e = S.edit, err = t => { $('#erro').textContent = t; };
   if (!String(e.nome).trim()) return err('Informe o nome da cliente.');
   for (const k of ['aniversario', 'dataDia']) if (String(e[k] || '').trim() && proxDDMM(e[k]) === null) return err('Escreva as datas como dia/mês, por exemplo 12/03.');
-  const c = {...e, nome:String(e.nome).trim(), whats:String(e.whats || '').replace(/\D/g, '')}; delete c._tipo; delete c._novo;
+  const dc = docLimpo(e.doc); if (dc && dc.length !== 11 && dc.length !== 14) return err('O CPF tem 11 números e o CNPJ tem 14. Confira o documento.');
+  const c = {...e, nome:String(e.nome).trim(), whats:String(e.whats || '').replace(/\D/g, ''), doc:dc}; delete c._tipo; delete c._novo;
   const i = D.clientes.findIndex(x => x.id === c.id); if (i >= 0) D.clientes[i] = c; else D.clientes.push(c);
   salvar(); S.edit = null; ir('clientes', 'cliente', c.id); if (i < 0) comemorar('fofo', 'Cliente nova cadastrada!');
 }
@@ -390,6 +443,7 @@ function formProduto() {
     ${campo('Nome', inp('nome', e.nome, 'maxlength="60"'))}
     <div class="duas">${campo('Categoria', `<select data-f="cat">${opts(Object.entries(CATS), e.cat)}</select>`)}${campo('Técnica principal', `<select data-f="tecnica">${opts(TECNICAS, e.tecnica)}</select>`)}</div>
     <div class="tres">${campo('Prazo', inp('prazo', e.prazo, 'inputmode="numeric"'), 'dias úteis')}${campo('Seu tempo', inp('tempo', e.tempo, 'inputmode="numeric"'), 'minutos por unidade')}${campo('Embalagem', inp('embalagem', e.embalagem, 'inputmode="decimal"'), 'R$ por unidade')}</div>
+    ${campo('NCM', inp('ncm', e.ncm, 'maxlength="10" inputmode="numeric" placeholder="0000.00.00"'), 'código fiscal do produto, para a nota. Confirme com seu contador')}
     <label class="opc"><span>Produto ativo (desmarque para fora de linha)</span><input type="checkbox" data-f="ativo" ${e.ativo !== false ? 'checked' : ''}></label>
   </div></div>
   <div class="bloco"><header><b>Ficha técnica</b><button class="link" data-act="add-ficha">+ Insumo</button></header><div class="dentro">
@@ -408,7 +462,7 @@ function salvarProduto() {
   const e = S.edit, err = t => { $('#erro').textContent = t; };
   if (!String(e.nome).trim()) return err('Dê um nome ao produto.');
   if (!(num(e.preco) > 0)) return err('Informe o preço de venda, ou toque em "Usar o preço sugerido".');
-  const p = {id:e.id, nome:String(e.nome).trim(), cat:e.cat, tecnica:e.tecnica, preco:num(e.preco), tempo:num(e.tempo), embalagem:num(e.embalagem), prazo:num(e.prazo), ativo:e.ativo !== false, ficha:e.ficha.filter(f => f.insumo && num(f.qtd) > 0).map(f => ({insumo:f.insumo, qtd:num(f.qtd)}))};
+  const p = {id:e.id, nome:String(e.nome).trim(), cat:e.cat, tecnica:e.tecnica, preco:num(e.preco), tempo:num(e.tempo), embalagem:num(e.embalagem), prazo:num(e.prazo), ncm:String(e.ncm || '').trim(), ativo:e.ativo !== false, ficha:e.ficha.filter(f => f.insumo && num(f.qtd) > 0).map(f => ({insumo:f.insumo, qtd:num(f.qtd)}))};
   const i = D.produtos.findIndex(x => x.id === p.id); if (i >= 0) D.produtos[i] = p; else D.produtos.push(p);
   salvar(); S.edit = null; ir('produtos');
 }
@@ -456,6 +510,7 @@ function telaFinanceiro() {
     <div class="info">${pct(usado)} do limite usado. No ritmo atual, o ano fecha em cerca de ${brl(proj)}${proj > lim ? ', acima do limite: converse com seu contador' : ''}. Conta só o que entrou como venda.</div>
     ${num(C().das) ? `<div class="lin0"><span>DAS deste mês (${brl(C().das)})</span>${dasPago ? '<span class="tag ok">pago</span>' : `<button class="btn" data-act="pagar-das">Registrar pagamento do DAS</button>`}</div>` : '<div class="info">Informe o valor do seu DAS em Ajustes para ter o lembrete mensal.</div>'}
   </div></div>
+  ${(() => { const em = D.pedidos.filter(o => { const n = nfDe(o); return n.precisa && n.status === 'emitida' && (n.data || '').slice(0,7) === m; }), pe = D.pedidos.filter(o => nfPendente(o) && nfPronta(o)); return `<div class="bloco"><header><b>Notas fiscais</b><span>${em.length} ${em.length === 1 ? 'emitida' : 'emitidas'} no mês · ${brl(em.reduce((s, o) => s + totalPedido(o), 0))}</span></header>${pe.length ? pe.map(o => `<div class="lin"><span>${esc(o.codigo)} · ${esc((cli(o.cliente) || {}).nome || 'Cliente')} · ${brl(totalPedido(o))}</span><button class="link" data-act="ver-pedido" data-id="${o.id}">Emitir nota</button></div>`).join('') : '<div class="dentro info">Nenhuma nota pendente.</div>'}</div>`; })()}
   <button class="cta" data-act="novo-lanc">+ Registrar entrada ou saída</button>
   ${Object.keys(porCat).length ? `<div class="bloco"><header><b>Saídas por categoria</b></header><div class="dentro">${barras(Object.entries(porCat).sort((x, y) => y[1] - x[1]).map(([k, v]) => [k, v, brl(v)]))}</div></div>` : ''}
   <div class="bloco"><header><b>Lançamentos do mês</b></header>${ls.length ? ls.map(l => `<div class="lin"><span>${br(l.data)} · ${esc(l.desc || l.categoria)}<br><small>${esc(l.categoria)}${l.forma ? ' · ' + esc(l.forma) : ''}</small></span><span class="dir"><b class="${l.tipo === 'saida' ? 'falta' : 'ok'}">${l.tipo === 'saida' ? '− ' : '+ '}${brl(l.valor)}</b><br>${l.pedido ? '<small>vem do pedido</small>' : confirmarBtn('excluir-lanc', l.id, 'Excluir')}</span></div>`).join('') : '<div class="dentro info">Nenhum lançamento neste mês.</div>'}</div>`;
@@ -510,7 +565,7 @@ function salvarOrc() {
 function converterOrc(o) {
   let c = o.whats && D.clientes.find(x => x.whats === o.whats);
   if (!c) { c = novoCliente(); Object.assign(c, {nome:o.contato ? o.contato + ' (' + o.empresa + ')' : o.empresa, whats:o.whats, origem:'Empresa', etiquetas:'empresa'}); delete c._tipo; delete c._novo; D.clientes.push(c); }
-  const p = {id:novoId('p'), codigo:proxCodigo(), cliente:c.id, itens:o.itens.map(i => { const pr = prod(i.produto); return {produto:i.produto, nome:i.nome, qtd:num(i.qtd), preco:num(i.preco), obs:'', custo:pr ? custoProduto(pr) : 0}; }), frete:0, desconto:0, entrega:o.prazo ? somaDias(hoje(), num(o.prazo)) : '', local:'', status:'pagamento', obs:'Orçamento ' + o.codigo + (o.nf ? ' · com nota fiscal' : ''), pagamentos:[], criado:hoje(), check:{}};
+  const p = {id:novoId('p'), codigo:proxCodigo(), cliente:c.id, itens:o.itens.map(i => { const pr = prod(i.produto); return {produto:i.produto, nome:i.nome, qtd:num(i.qtd), preco:num(i.preco), obs:'', custo:pr ? custoProduto(pr) : 0}; }), frete:0, desconto:0, entrega:o.prazo ? somaDias(hoje(), num(o.prazo)) : '', local:'', status:'pagamento', obs:'Orçamento ' + o.codigo + (o.nf ? ' · com nota fiscal' : ''), pagamentos:[], criado:hoje(), check:{}, nf:{precisa:!!o.nf, status:'pendente', tipo:C().nfTipo || 'produto', numero:'', data:''}};
   D.pedidos.push(p); o.pedido = p.id; salvar(); ir('pedidos', 'pedido', p.id); comemorar('uau', 'Uau! Orçamento aprovado virou pedido.');
 }
 
@@ -547,6 +602,12 @@ function telaAjustes() {
     <div class="tres">${campo('Limite anual do MEI', `<input type="text" id="c-lim" value="${numTxt(c.limiteMei)}" inputmode="decimal">`, 'R$')}${campo('Valor do DAS', `<input type="text" id="c-das" value="${numTxt(c.das)}" inputmode="decimal">`, 'R$ por mês')}${campo('Seu WhatsApp', `<input type="text" id="c-whats" value="${esc(fone(c.whats))}" inputmode="tel">`)}</div>
     ${campo('Link para avaliar a loja no Google', `<input type="text" id="c-google" value="${esc(c.linkGoogle)}" placeholder="https://g.page/r/...">`, 'pegue no seu Perfil da Empresa no Google, em Pedir avaliações')}
   </div></div>
+  <div class="bloco"><header><b>Nota fiscal</b></header><div class="dentro">
+    <div class="duas">${campo('Tipo de nota mais comum', `<select id="c-nftipo">${opts([['produto','Produto (NF-e)'],['servico','Serviço (NFS-e)']], c.nfTipo)}</select>`)}${campo('CFOP padrão', `<input type="text" id="c-cfop" value="${esc(c.nfCfop)}" maxlength="4" inputmode="numeric">`, 'venda de produção própria: 5101')}</div>
+    ${campo('Link do emissor', `<input type="text" id="c-nflink" value="${esc(c.nfLink)}" placeholder="${esc(EMISSORES[c.nfTipo || 'produto'][1])}">`, 'deixe em branco para usar o portal oficial')}
+    <label class="opc"><span>Emitir nota em todas as vendas</span><input type="checkbox" id="c-nftodas" ${c.nfTodas ? 'checked' : ''}></label>
+    <div class="info">Hoje a nota é obrigatória na venda para empresa (CNPJ) e quando a cliente pede. A partir de 1º de janeiro de 2027, a lei prevê nota em todas as vendas do MEI: quando chegar a data, marque a opção acima. Os códigos fiscais (NCM, CFOP) são sugestões; confirme com seu contador.</div>
+  </div></div>
   <div class="erro" id="erro" role="alert"></div><button class="cta" data-act="salvar-ajustes">Guardar ajustes</button>
   <h2 class="sec">Figurinhas da Jú</h2>
   <div class="info">Baixe e envie no WhatsApp junto com as mensagens. As figurinhas também aparecem sozinhas na ferramenta quando algo acontece.</div>
@@ -563,7 +624,7 @@ function telaAjustes() {
 function baixar(nome, tipo, conteudo) { const b = new Blob([conteudo], {type:tipo}), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = nome; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 function csv() {
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const linhas = [['Código','Data','Cliente','WhatsApp','Itens','Total','Pago','Etapa','Entrega'].map(q).join(';')].concat(D.pedidos.map(o => { const c = cli(o.cliente) || {}; return [o.codigo, br(o.criado), c.nome, fone(c.whats), (o.itens || []).map(i => num(i.qtd) + ' x ' + i.nome).join(' | '), String(totalPedido(o).toFixed(2)).replace('.', ','), String(pagoPedido(o).toFixed(2)).replace('.', ','), etNome(o.status), br(o.entrega)].map(q).join(';'); }));
+  const linhas = [['Código','Data','Cliente','WhatsApp','CPF/CNPJ','Itens','Total','Pago','Etapa','Entrega','Nota fiscal'].map(q).join(';')].concat(D.pedidos.map(o => { const c = cli(o.cliente) || {}; const nf = nfDe(o); return [o.codigo, br(o.criado), c.nome, fone(c.whats), docTxt(c.doc), (o.itens || []).map(i => num(i.qtd) + ' x ' + i.nome).join(' | '), String(totalPedido(o).toFixed(2)).replace('.', ','), String(pagoPedido(o).toFixed(2)).replace('.', ','), etNome(o.status), br(o.entrega), !nf.precisa ? 'sem nota' : nf.status === 'emitida' ? 'nº ' + nf.numero + ' em ' + br(nf.data) : nf.status].map(q).join(';'); }));
   baixar('pedidos-' + hoje() + '.csv', 'text/csv;charset=utf-8', '﻿' + linhas.join('\n'));
 }
 
@@ -582,12 +643,13 @@ function carregarExemplos() {
   P('p-kit','Kit fim de ano para equipe','empresas','Sublimação',89.9,30,2,[['i-caneca',1],['i-papel',1],['i-caixa',1],['i-choc',1]],30);
   const Cl = (id, nome, whats, bairro, origem, aniversario, etiquetas) => D.clientes.push({id, nome:nome + ' (exemplo)', whats, bairro, endereco:'', origem, etiquetas, aniversario, dataRotulo:'', dataDia:'', obs:'', autorizaFoto:true, aceitaMsg:true, contatos:[], criado:hoje()});
   const h = hoje(), aniv = brCurto(somaDias(h, 12));
-  Cl('c1','Ana','41900000001','Boqueirão','Instagram',aniv,'mãe'); Cl('c2','Bruna','41900000002','Hauer','Indicação','','noiva'); Cl('c3','Carla','41900000003','São José dos Pinhais','Catálogo','','');
+  Cl('c1','Ana','41900000001','Boqueirão','Instagram',aniv,'mãe'); D.clientes.push({id:'c4', nome:'Empresa exemplo Ltda.', whats:'41900000009', doc:'11222333000181', bairro:'Centro', endereco:'Rua Exemplo, 100, Centro, Curitiba/PR', origem:'Empresa', etiquetas:'empresa', aniversario:'', dataRotulo:'', dataDia:'', obs:'', autorizaFoto:false, aceitaMsg:true, contatos:[], criado:hoje()}); Cl('c2','Bruna','41900000002','Hauer','Indicação','','noiva'); Cl('c3','Carla','41900000003','São José dos Pinhais','Catálogo','','');
   const Pd = (id, cod, cliente, itens, status, entrega, pago, criado, extra) => { const o = {id, codigo:cod, cliente, itens:itens.map(([p, q]) => { const pr = prod(p); return {produto:p, nome:pr.nome, qtd:q, preco:pr.preco, obs:'', custo:custoProduto(pr)}; }), frete:15, desconto:0, entrega, local:'Entrega', status:'novo', obs:'', pagamentos:[], criado, check:{}, ...extra}; D.pedidos.push(o); if (pago) registrarPagamento(o, pago === 'tudo' ? totalPedido(o) : pago, 'Pix', criado); if (status !== 'novo') { if (['producao','pronto','entregue'].includes(status)) mudarStatus(o, 'producao'); mudarStatus(o, status); } return o; };
   Pd('e1','JF0001','c1',[['p-box',1]],'producao',somaDias(h, 2),'tudo',somaDias(h, -3),{check:{arte:true, separado:true}});
   Pd('e2','JF0002','c2',[['p-padrinho',6]],'arte',somaDias(h, 6),150,somaDias(h, -2));
   Pd('e3','JF0003','c3',[['p-caneca',2],['p-chav',1]],'pagamento',somaDias(h, 5),0,somaDias(h, -1));
   const o4 = Pd('e4','JF0004','c1',[['p-caneca',1]],'entregue',somaDias(h, -6),'tudo',somaDias(h, -12)); o4.entregueEm = somaDias(h, -5);
+  Pd('e5','JF0005','c4',[['p-kit',12]],'producao',somaDias(h, 8),'tudo',somaDias(h, -2));
   D.lancamentos.push({id:'l-ex1', tipo:'saida', categoria:'Insumos', valor:228, data:somaDias(h, -8), desc:'Canecas para sublimação (exemplo)'});
   D.lancamentos.push({id:'l-ex2', tipo:'saida', categoria:'Embalagens', valor:84, data:somaDias(h, -4), desc:'Caixas e fitas (exemplo)'});
   D.orcamentos.push({id:'o-ex1', codigo:'OR0001', empresa:'Empresa exemplo Ltda.', contato:'Rafael', whats:'41900000009', itens:[{produto:'p-kit', nome:prod('p-kit').nome, qtd:25, preco:84.9}], validade:somaDias(h, 10), prazo:30, status:'enviado', obs:'Logo da empresa na caneca', nf:true, criado:somaDias(h, -1)});
@@ -627,6 +689,10 @@ const ACT = {
   'pagar': el => { const o = ped(el.dataset.id), v = num($('#pg-valor').value); if (!(v > 0)) { aviso('Informe o valor recebido.'); return; } registrarPagamento(o, v, $('#pg-forma').value, $('#pg-data').value || hoje()); if (o.status === 'pagamento' && saldoPedido(o) === 0) mudarStatus(o, 'arte'); render(); comemorar('pagamento', saldoPedido(o) === 0 ? 'Pagamento confirmado! Pedido quitado.' : 'Pagamento de ' + brl(v) + ' registrado. Falta ' + brl(saldoPedido(o)) + '.'); },
   'excluir-pag': el => { const [oid, pid] = el.dataset.id.split(':'), o = ped(oid), p = o.pagamentos.find(x => x.id === pid); o.pagamentos = o.pagamentos.filter(x => x.id !== pid); D.lancamentos = D.lancamentos.filter(l => l.id !== p.lanc); salvar(); S.confirmar = null; render(); },
   'excluir-pedido': el => { const o = ped(el.dataset.id); if (o.baixado) baixaInsumos(o, -1); D.lancamentos = D.lancamentos.filter(l => l.pedido !== o.id); D.pedidos = D.pedidos.filter(x => x.id !== o.id); salvar(); ir('pedidos'); },
+  'nf-copiar': el => { const t = dadosNF(ped(el.dataset.id)); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { el.textContent = 'Dados copiados'; }).catch(() => aviso('Não consegui copiar. Abra "Ver os dados" e copie à mão.')); },
+  'nf-emitida': el => { const o = ped(el.dataset.id), nn = $('#nf-num').value.trim(); if (!nn) { aviso('Informe o número da nota emitida.'); return; } o.nf = {...nfDe(o), precisa:true, status:'emitida', numero:nn, data:$('#nf-data').value || hoje()}; delete o.nf.auto; salvar(); render(); comemorar('boa', 'Boa! Nota ' + nn + ' registrada.'); },
+  'nf-dispensar': el => { const o = ped(el.dataset.id); o.nf = {...nfDe(o), status:'dispensada'}; delete o.nf.auto; salvar(); render(); },
+  'nf-desfazer': el => { const o = ped(el.dataset.id); o.nf = {...nfDe(o), status:'pendente', numero:'', data:''}; delete o.nf.auto; S.confirmar = null; salvar(); render(); },
   'pos-feito': el => { ped(el.dataset.id).posVenda = true; salvar(); render(); },
   'importar': () => { S.imp = ''; ir('pedidos', 'importar'); },
   'ler-msg': () => { S.imp = $('#imp').value; const e = lerMensagem(S.imp); if (!e) { $('#erro').innerHTML = mascote('ha', '<b>Hã? Não reconheci um pedido nessa mensagem.</b><span>Confira se colou o texto inteiro, ou registre o pedido à mão.</span>'); return; } if (D.pedidos.some(o => o.codigo === e.codigo)) { $('#erro').textContent = 'O pedido ' + e.codigo + ' já foi registrado.'; return; } abrirForm(e); },
@@ -661,7 +727,7 @@ const ACT = {
   'salvar-orc': salvarOrc,
   'excluir-orc': el => { D.orcamentos = D.orcamentos.filter(o => o.id !== el.dataset.id); salvar(); S.confirmar = null; render(); },
   'converter-orc': el => converterOrc(orc(el.dataset.id)),
-  'salvar-ajustes': () => { const c = C(), v = id => num($(id).value); Object.assign(c, {fixas:v('#c-fixas'), taxas:v('#c-taxas'), lucro:v('#c-lucro'), hora:v('#c-hora'), capacidade:v('#c-cap'), limiteMei:v('#c-lim') || 81000, das:v('#c-das'), whats:$('#c-whats').value.replace(/\D/g, ''), linkGoogle:$('#c-google').value.trim(), prefixo:($('#c-pref').value.trim() || 'JF').toUpperCase()}); if (c.fixas + c.taxas + c.lucro >= 100) { $('#erro').textContent = 'Despesas, taxas e lucro somam 100% ou mais. Reduza algum deles.'; return; } salvar(); aviso('Ajustes guardados.'); },
+  'salvar-ajustes': () => { const c = C(), v = id => num($(id).value); Object.assign(c, {fixas:v('#c-fixas'), taxas:v('#c-taxas'), lucro:v('#c-lucro'), hora:v('#c-hora'), capacidade:v('#c-cap'), limiteMei:v('#c-lim') || 81000, das:v('#c-das'), whats:$('#c-whats').value.replace(/\D/g, ''), linkGoogle:$('#c-google').value.trim(), prefixo:($('#c-pref').value.trim() || 'JF').toUpperCase(), nfTipo:$('#c-nftipo').value, nfCfop:$('#c-cfop').value.replace(/\D/g, '') || '5101', nfLink:$('#c-nflink').value.trim(), nfTodas:$('#c-nftodas').checked}); if (c.fixas + c.taxas + c.lucro >= 100) { $('#erro').textContent = 'Despesas, taxas e lucro somam 100% ou mais. Reduza algum deles.'; return; } salvar(); aviso('Ajustes guardados.'); },
   'add-data': () => { const n = $('#dt-nome').value.trim(), d = $('#dt-dia').value; if (!n || !d) { aviso('Informe o nome e o dia da data comercial.'); return; } D.datas.push({id:novoId('d'), nome:n, data:d}); salvar(); render(); },
   'excluir-data': el => { D.datas = D.datas.filter(d => d.id !== el.dataset.id); salvar(); S.confirmar = null; render(); },
   'modelo-padrao': el => { D.modelos[el.dataset.k] = MODELOS_PADRAO[el.dataset.k].slice(); salvar(); render(); },
@@ -687,6 +753,8 @@ document.addEventListener('input', ev => {
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.dataset.actChange === 'status') { const o = ped(t.dataset.id); mudarStatus(o, t.value); render(); festaEtapa(o); }
+  if (t.dataset.actChange === 'nf-precisa') { const o = ped(t.dataset.id); o.nf = {...nfDe(o), precisa:t.checked}; delete o.nf.auto; salvar(); render(); return; }
+  if (t.dataset.actChange === 'nf-tipo') { const o = ped(t.dataset.id); o.nf = {...nfDe(o), tipo:t.value}; delete o.nf.auto; salvar(); render(); return; }
   if (t.dataset.actChange === 'check') { const o = ped(t.dataset.id); o.check = o.check || {}; o.check[t.dataset.k] = t.checked; salvar(); if (t.checked && ['arte','separado','produzido','embalado'].every(k => o.check[k])) comemorar('amor', 'Feito com amor! Tudo pronto neste pedido.'); }
   if (t.id === 'restaurar' && t.files[0]) { const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.pedidos) || !d.config) throw 0; D = d; carregar0(); salvar(); ir('hoje'); aviso('Cópia restaurada.'); } catch (e) { aviso('Este arquivo não é uma cópia de segurança da Gestão Jú Festas.'); } }; r.readAsText(t.files[0]); }
 });

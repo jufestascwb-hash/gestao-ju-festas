@@ -179,3 +179,10 @@ h2.sec::before{content:"";width:26px;height:26px;flex:none;background:url(img/la
 .festa img{height:88px;width:auto}
 @media(prefers-reduced-motion:no-preference){.festa{transition:transform .35s cubic-bezier(.2,1.4,.4,1),opacity .2s}.festa.on img{animation:pulo .6s ease}}
 @keyframes pulo{0%,100%{transform:none}40%{transform:translateY(-8px) rotate(-4deg)}}
+
+/* nota fiscal */
+.alerta-nf{background:#FFF1F3;border:1px solid var(--rosa-blush, #F9ACAB);border-radius:12px;padding:10px 12px;font-size:14px}
+.nf-passos{font-size:13px;color:var(--marrom-claro, #8A5A42);display:flex;flex-wrap:wrap;gap:4px 10px}
+.nf-passos b{color:var(--rosa-forte, #C93B62)}
+.nf-ver summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--rosa-forte, #C93B62)}
+.nf-ver pre{white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid var(--borda, #F1C8BE);border-radius:12px;padding:12px;font-size:13px;line-height:1.5;margin:8px 0 0;font-family:inherit}
