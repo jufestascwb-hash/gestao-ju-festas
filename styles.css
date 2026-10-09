@@ -147,3 +147,35 @@ table.tab{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:
 .dia b{font-size:12px;min-height:16px}
 .dia small{font-size:10.5px;color:var(--marrom-claro)}
 .tab td:first-child{min-width:150px}
+
+/* Identidade: figurinhas, laço, coração e frase de assinatura */
+.script{font-family:"Great Vibes","Parisienne",cursive;font-weight:400;font-size:32px;line-height:1;color:var(--rosa-forte)}
+.balao b.script{display:block;margin-bottom:2px}
+.ju{grid-template-columns:110px minmax(0,1fr)}
+.ju img{max-height:190px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(79,50,35,.12))}
+h2.sec{display:flex;align-items:center;gap:8px}
+h2.sec::before{content:"";width:26px;height:26px;flex:none;background:url(img/laco.webp) center/contain no-repeat}
+.bloco>header b::after{content:"";display:inline-block;width:12px;height:11px;margin-left:6px;background:url(img/coracao.webp) center/contain no-repeat;vertical-align:-1px}
+.alerta-ju .balao{border-color:var(--rosa-forte);background:#FFF0F3}
+.alerta-ju .balao b{color:var(--rosa-forte)}
+.erro .balao{color:var(--marrom);font-weight:600}
+.campanha{position:relative}
+.campanha .canto{position:absolute;right:6px;bottom:4px;height:92px;width:auto;opacity:.95;pointer-events:none}
+.campanha .lin{padding-right:86px}
+.kit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px 14px}
+@media(max-width:560px){.kit{grid-template-columns:1fr}}
+.kit-it{display:grid;gap:8px;justify-items:center;text-align:center;background:var(--fundo);border-radius:16px;padding:10px}
+.kit-it img{height:150px;width:auto}
+.kit-it .acoes{justify-content:center}
+.galeria{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.gal-it{background:var(--branco);border:2px solid var(--borda);border-radius:16px;padding:8px;display:grid;gap:6px;justify-items:center}
+.gal-it img{height:130px;width:auto;max-width:100%;object-fit:contain}
+.rodape{display:grid;justify-items:center;gap:4px;text-align:center;padding:24px 0 8px;border-top:2px dashed var(--borda);margin-top:10px}
+.rodape img{width:34px;height:auto}
+.rodape .script{font-size:28px}
+.rodape small{font-family:var(--sans);font-size:11.5px;color:var(--marrom-claro)}
+.festa{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:50;display:flex;align-items:center;gap:10px;max-width:min(420px,calc(100vw - 32px));background:var(--branco);border:2px solid var(--rosa-blush);border-radius:22px;padding:8px 16px 8px 8px;box-shadow:0 8px 24px rgba(79,50,35,.18);font-family:var(--sans);font-weight:700;font-size:15px;transform:translate(-50%,160%);opacity:0;pointer-events:none}
+.festa.on{transform:translate(-50%,0);opacity:1}
+.festa img{height:88px;width:auto}
+@media(prefers-reduced-motion:no-preference){.festa{transition:transform .35s cubic-bezier(.2,1.4,.4,1),opacity .2s}.festa.on img{animation:pulo .6s ease}}
+@keyframes pulo{0%,100%{transform:none}40%{transform:translateY(-8px) rotate(-4deg)}}

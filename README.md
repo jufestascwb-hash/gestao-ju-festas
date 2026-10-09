@@ -17,6 +17,10 @@ Ferramenta de gestão da Jú Festas e Presentes, para presentes personalizados. 
 | Relatórios | Vendas por mês, mais vendidos, margem por produto, ticket médio, recompra e origem das clientes |
 | Ajustes | Percentuais do markup, valor da hora, capacidade, MEI, datas comerciais, modelos de mensagem e cópia de segurança |
 
+## Identidade da marca
+
+A ferramenta usa o logo, o laço, o coração e as figurinhas oficiais da Jú (pasta `img/fig`). A mascote aparece nas telas vazias, nos avisos e comemora quando um pagamento é confirmado, um pedido fica pronto ou é entregue. Em **Ajustes > Figurinhas da Jú** dá para baixar cada figurinha e enviar no WhatsApp. No pedido entregue, o bloco **Pós-venda com carinho** junta as figurinhas de agradecimento, avaliação no Google e indicação com a mensagem pronta.
+
 ## Onde ficam os dados
 
 Os dados ficam guardados **no navegador de quem usa** (armazenamento local). Isso significa:

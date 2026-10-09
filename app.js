@@ -20,6 +20,9 @@ const MODELOS_PADRAO = {
   posvenda: ['Pós-venda','Oi, {nome}! Chegou tudo certinho? Quem recebeu gostou? Se puder, me manda uma foto. Posso postar no Instagram?'],
   data: ['Lembrar de uma data','Oi, {nome}! Tô te lembrando: {rotulo} está chegando, dia {dia}. Quer que eu prepare um presente com nome? Pedindo com uma semana de antecedência dá tempo.'],
   campanha: ['Campanha de data comercial','Oi, {nome}! {rotulo} está chegando, dia {dia}. Já estou separando os presentes personalizados. Quer ver as opções?'],
+  agradecer: ['Agradecer a compra','Oi, {nome}! Obrigada pela sua preferência! Foi um carinho fazer o seu pedido {codigo}. Quando precisar, é só me chamar.'],
+  avaliar: ['Pedir avaliação no Google','Oi, {nome}! Se você gostou, me ajuda com uma avaliação no Google? Leva um minutinho e ajuda muito a Jú Festas: {link}'],
+  indicar: ['Pedir indicação','Oi, {nome}! Se conhecer alguém que vai amar um presente personalizado, me indica? Vou cuidar com o mesmo carinho.'],
   reativar: ['Retomar contato','Oi, {nome}! Faz um tempinho que a gente não se fala. Tem novidade por aqui. Quer dar uma olhada?'],
   orcamento: ['Enviar orçamento para empresa','Olá, {nome}! Segue o orçamento {codigo} da Jú Festas e Presentes:\n{itens}\nTotal: {total}\nProdução: {prazo}. Orçamento válido até {validade}.']
 };
@@ -56,7 +59,7 @@ function proxDDMM(ddmm) { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(String(ddmm ||
 /* ---------- dados ---------- */
 function base() {
   return {v:1, exemplo:false, criado:new Date().toISOString(),
-    config:{nomeLoja:'Jú Festas e Presentes', whats:'', fixas:15, taxas:5, lucro:30, hora:25, capacidade:20, das:0, limiteMei:81000, prefixo:'JF'},
+    config:{nomeLoja:'Jú Festas e Presentes', whats:'', linkGoogle:'', fixas:15, taxas:5, lucro:30, hora:25, capacidade:20, das:0, limiteMei:81000, prefixo:'JF'},
     modelos:JSON.parse(JSON.stringify(MODELOS_PADRAO)), datas:DATAS_PADRAO.map(d => ({...d})),
     produtos:[], insumos:[], clientes:[], pedidos:[], lancamentos:[], orcamentos:[]};
 }
@@ -99,6 +102,7 @@ function baixaInsumos(o, sinal) {
   (o.itens || []).forEach(it => { const p = prod(it.produto); if (!p) return; (p.ficha || []).forEach(f => { const i = ins(f.insumo); if (i) i.estoque = Math.round((num(i.estoque) - sinal * num(f.qtd) * num(it.qtd)) * 1000) / 1000; }); });
   o.baixado = sinal > 0;
 }
+function festaEtapa(o) { if (o.status === 'entregue') comemorar('uau', 'Uau! Pedido ' + o.codigo + ' entregue.'); else if (o.status === 'pronto') comemorar('boa', 'Boa! Pedido ' + o.codigo + ' pronto para entrega.'); }
 function mudarStatus(o, novo) {
   if (novo === 'producao' && !o.baixado) baixaInsumos(o, 1);
   if (novo === 'cancelado' && o.baixado) baixaInsumos(o, -1);
@@ -119,7 +123,7 @@ function texto(k, c, x) {
   return m.replace(/\{nome\}/g, primeiro(c && c.nome)).replace(/\{codigo\}/g, o ? o.codigo : (x.codigo || ''))
     .replace(/\{total\}/g, o ? brl(totalPedido(o)) : (x.total || '')).replace(/\{saldo\}/g, o ? brl(saldoPedido(o)) : '')
     .replace(/\{entrega\}/g, o && o.entrega ? br(o.entrega) : 'a data combinada').replace(/\{rotulo\}/g, x.rotulo || '')
-    .replace(/\{dia\}/g, x.dia || '').replace(/\{itens\}/g, x.itens || '').replace(/\{prazo\}/g, x.prazo || '').replace(/\{validade\}/g, x.validade || '');
+    .replace(/\{dia\}/g, x.dia || '').replace(/\{itens\}/g, x.itens || '').replace(/\{prazo\}/g, x.prazo || '').replace(/\{validade\}/g, x.validade || '').replace(/\{link\}/g, C().linkGoogle || '').replace(/ +$/gm, '');
 }
 function zap(c, t, rot, k) {
   const w = c && c.whats;
@@ -138,16 +142,27 @@ function casca() {
   document.body.innerHTML = `
   <header class="topo"><div class="wrap">
     <img class="logo" src="img/logo.webp" alt="Jú Festas e Presentes">
-    <div class="tit"><b>Gestão</b><small id="salvo"></small></div>
+    <div class="tit"><b>Gestão</b><small>Personalizados, mimos e presentes</small></div>
     <button class="btn" data-act="novo-pedido">+ Pedido</button>
   </div>
   <nav class="abas wrap" aria-label="Módulos">${ABAS.map(a => `<button class="aba" data-act="aba" data-aba="${a[0]}">${a[1]}</button>`).join('')}</nav></header>
-  <div class="wrap"><div class="aviso" id="aviso" role="status" hidden></div><main id="app"></main></div>`;
+  <div class="wrap"><div class="aviso" id="aviso" role="status" hidden></div><main id="app"></main><footer class="rodape"><img src="img/laco.webp" alt=""><span class="script">Feito com amor, para você celebrar!</span><small>Jú Festas e Presentes · dados guardados neste navegador</small></footer></div>`;
   app = $('#app');
 }
-function marcaAbas() { document.querySelectorAll('.aba').forEach(b => b.setAttribute('aria-current', b.dataset.aba === S.aba ? 'page' : 'false')); const s = $('#salvo'); if (s) s.textContent = semArmazenamento ? 'sem gravação neste navegador' : 'dados neste navegador'; }
+function marcaAbas() { document.querySelectorAll('.aba').forEach(b => b.setAttribute('aria-current', b.dataset.aba === S.aba ? 'page' : 'false')); }
 
-const mascote = (k, html) => `<div class="ju"><img src="img/mascote-${k}.webp" alt=""><div class="balao">${html}</div></div>`;
+const FIG = {ei:'Mascote Jú dizendo: Ei, você!', 'bom-dia':'Mascote Jú dizendo: Bom dia!', boa:'Mascote Jú dizendo: Boa!', lembra:'Mascote Jú dizendo: Tô te lembrando!', uau:'Mascote Jú dizendo: Uau! Aprovado!', hein:'Mascote Jú dizendo: Hein???', fofo:'Mascote Jú dizendo: Fofo demais', ha:'Mascote Jú dizendo: Hã?', oque:'Mascote Jú dizendo: O quêêê?', amor:'Figurinha: Feito com amor!', obrigada:'Figurinha: Obrigada pela sua preferência!', avalie:'Figurinha: Avalie a Jú Festas no Google', indica:'Figurinha: Me indica para alguém?', pagamento:'Figurinha: Pagamento confirmado!'};
+const mascote = (k, html) => `<div class="ju"><img src="img/fig/${k}.webp" alt="${FIG[k]}"><div class="balao">${html}</div></div>`;
+function comemorar(k, t) {
+  let el = $('#festa'); if (!el) { el = document.createElement('div'); el.id = 'festa'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.innerHTML = `<img src="img/fig/${k}.webp" alt="${FIG[k]}"><span>${esc(t)}</span>`; el.className = 'festa'; void el.offsetWidth; el.className = 'festa on';
+  clearTimeout(el._t); el._t = setTimeout(() => { el.className = 'festa'; }, 3400);
+}
+const figBaixar = (k, rot) => `<a class="link" href="img/fig/png/${k}.png" download="ju-festas-${k}.png">${rot || 'Baixar figurinha'}</a>`;
+function kitPosVenda(c, o) {
+  const itens = [['obrigada', 'agradecer'], ['avalie', 'avaliar'], ['indica', 'indicar']];
+  return `<div class="bloco"><header><b>Pós-venda com carinho</b><span>baixe a figurinha e envie junto com a mensagem</span></header><div class="kit">${itens.map(([f, m]) => `<div class="kit-it"><img src="img/fig/${f}.webp" alt="${FIG[f]}"><div class="acoes">${figBaixar(f)}${m === 'avaliar' && !C().linkGoogle ? '<span class="info">Cadastre o link de avaliação em Ajustes</span>' : zap(c, texto(m, c, {pedido:o}), D.modelos[m][0], m)}</div></div>`).join('')}</div></div>`;
+}
 const kpi = (rot, val, extra) => `<div class="kpi"><small>${rot}</small><b>${val}</b>${extra ? `<span>${extra}</span>` : ''}</div>`;
 const tagEt = s => `<span class="tag et-${s}">${etNome(s)}</span>`;
 const opts = (lista, sel) => lista.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(sel) === String(v) ? 'selected' : ''}>${esc(t)}</option>`; }).join('');
@@ -175,8 +190,13 @@ function telaHoje() {
   const datas = []; D.clientes.forEach(c => [['seu aniversário', c.aniversario], [c.dataRotulo || 'a data especial', c.dataDia]].forEach(([r, d]) => { const n = proxDDMM(d); if (n !== null && n <= 30) datas.push({c, rotulo:r, dia:d, n}); })); datas.sort((a, b) => a.n - b.n);
   const camp = D.datas.map(d => ({...d, n:dias(h, d.data)})).filter(d => d.n >= 0 && d.n <= 21).sort((a, b) => a.n - b.n);
   const fase = n => n <= 3 ? 'último dia de pedido' : n <= 7 ? 'reforçar a campanha' : n <= 14 ? 'abrir a campanha' : 'preparar a campanha';
-  return `<div class="kpis">${kpi('Pedidos em aberto', ab.length)}${kpi('A receber', brl(receber))}${kpi('Entregas em 7 dias', sem.length)}${kpi('Resultado do mês', brl(ent - sai), 'entradas ' + brl(ent) + ' · saídas ' + brl(sai))}</div>
-  ${camp.length ? `<div class="bloco"><header><b>Campanhas</b><span>regra: abre 14 dias antes, reforça 7, último dia de pedido 3</span></header>${camp.map(d => `<div class="lin"><span><b>${esc(d.nome)}</b> · ${br(d.data)} · ${d.n === 0 ? 'é hoje' : 'faltam ' + d.n + ' dias'}</span><span class="tag ${d.n <= 3 ? 'alerta' : ''}">${fase(d.n)}</span></div>`).join('')}</div>` : ''}
+  const hora = new Date().getHours(), saud = hora < 12 ? 'Bom dia!' : hora < 18 ? 'Boa tarde!' : 'Boa noite!';
+  const entHoje = ab.filter(o => o.entrega === h).length, emProd = ab.filter(o => ['arte','producao'].includes(o.status)).length;
+  const atrasados = ab.filter(o => o.entrega && o.entrega < h);
+  const topo = mascote(hora < 12 ? 'bom-dia' : 'ei', `<b class="script">${saud}</b><span>${entHoje ? `Hoje tem <b>${entHoje} ${entHoje === 1 ? 'entrega' : 'entregas'}</b>. ` : 'Nenhuma entrega marcada para hoje. '}${emProd ? `${emProd} ${emProd === 1 ? 'pedido está' : 'pedidos estão'} em arte ou produção. ` : ''}${receber ? `Falta receber ${brl(receber)}.` : 'Tudo recebido.'}</span>`);
+  const alerta = atrasados.length ? `<div class="alerta-ju">${mascote('oque', `<b>${atrasados.length === 1 ? 'Tem 1 pedido' : 'Tem ' + atrasados.length + ' pedidos'} com entrega atrasada!</b><span>${atrasados.map(o => `<button class="link" data-act="ver-pedido" data-id="${o.id}">${esc(o.codigo)} · ${esc((cli(o.cliente) || {}).nome || '')} · ${br(o.entrega)}</button>`).join('<br>')}</span>`)}</div>` : '';
+  return `${topo}${alerta}<div class="kpis">${kpi('Pedidos em aberto', ab.length)}${kpi('A receber', brl(receber))}${kpi('Entregas em 7 dias', sem.length)}${kpi('Resultado do mês', brl(ent - sai), 'entradas ' + brl(ent) + ' · saídas ' + brl(sai))}</div>
+  ${camp.length ? `<div class="bloco campanha"><img class="canto" src="img/fig/lembra.webp" alt="${FIG.lembra}"><header><b>Campanhas</b><span>regra: abre 14 dias antes, reforça 7, último dia de pedido 3</span></header>${camp.map(d => `<div class="lin"><span><b>${esc(d.nome)}</b> · ${br(d.data)} · ${d.n === 0 ? 'é hoje' : 'faltam ' + d.n + ' dias'}</span><span class="tag ${d.n <= 3 ? 'alerta' : ''}">${fase(d.n)}</span></div>`).join('')}</div>` : ''}
   <h2 class="sec">Entregas dos próximos 7 dias</h2>${sem.length ? sem.map(cartaoPedido).join('') : '<div class="vazio">Nenhuma entrega marcada para esta semana.</div>'}
   ${falta.length ? `<div class="bloco"><header><b>Insumos no mínimo ou abaixo</b><button class="link" data-act="aba" data-aba="insumos">Ver lista de compras</button></header>${falta.map(i => `<div class="lin"><span>${esc(i.nome)}</span><span class="tag alerta">${numTxt(num(i.estoque)) || '0'} ${esc(i.unidade)} · mínimo ${numTxt(num(i.minimo))}</span></div>`).join('')}</div>` : ''}
   <h2 class="sec">Relacionamento</h2>
@@ -201,7 +221,7 @@ function telaPedidos() {
   return `<div class="duasb"><button class="cta" data-act="novo-pedido">+ Registrar pedido</button><button class="cta sec" data-act="importar">Importar pedido do catálogo</button></div>
   <div class="linha">${[['abertos','Em aberto'],['todos','Todos']].concat(ET).map(e => `<button class="chip" data-act="filtro" data-v="${e[0]}" aria-pressed="${f === e[0]}">${e[1]}${e[0] !== 'abertos' && e[0] !== 'todos' ? ' (' + D.pedidos.filter(o => o.status === e[0]).length + ')' : ''}</button>`).join('')}</div>
   ${campo('Buscar por cliente ou código', `<input type="text" id="busca" value="${esc(S.busca)}">`)}
-  <div id="lista">${l.length ? l.map(cartaoPedido).join('') : mascote('lembra', D.pedidos.length ? 'Nenhum pedido neste filtro.' : '<b>Nenhum pedido ainda.</b><span>Registre o primeiro ou cole a mensagem que chegou do catálogo.</span>')}</div>`;
+  <div id="lista">${l.length ? l.map(cartaoPedido).join('') : mascote(D.pedidos.length ? 'hein' : 'lembra', D.pedidos.length ? '<b>Hein? Nenhum pedido aqui.</b><span>Troque o filtro ou a busca.</span>' : '<b>Nenhum pedido ainda.</b><span>Registre o primeiro ou cole a mensagem que chegou do catálogo.</span>')}</div>`;
 }
 function telaPedido() {
   const o = ped(S.id); if (!o) return ir('pedidos');
@@ -227,6 +247,7 @@ function telaPedido() {
   <div class="bloco"><header><b>Resultado do pedido</b><span>pela ficha técnica</span></header><div class="dentro soma">
     <div><span>Total</span><span>${brl(total)}</span></div><div><span>Custo dos produtos</span><span>− ${brl(custo)}</span></div><div><span>Taxas (${pct(num(C().taxas))})</span><span>− ${brl(taxa)}</span></div><div class="total"><span>Lucro estimado</span><span>${brl(lucro)}</span></div>
   </div></div>
+  ${o.status === 'entregue' ? kitPosVenda(c, o) : ''}
   <div class="bloco"><header><b>Mensagens</b></header><div class="dentro acoes">${['confirma','cobranca','arte','producao','pronto','posvenda'].map(k => zap(c, texto(k, c, {pedido:o}), (D.modelos[k] || MODELOS_PADRAO[k])[0], k)).join('')}</div></div>`;
 }
 function itemVazio() { return {produto:'', nome:'', qtd:'1', preco:'', obs:''}; }
@@ -266,7 +287,7 @@ function salvarPedido() {
   const antigo = ped(o.id);
   if (antigo) { const st = o.status; o.status = antigo.status; Object.assign(antigo, o); if (st !== antigo.status) mudarStatus(antigo, st); }
   else { const st = o.status; o.status = 'novo'; D.pedidos.push(o); if (st !== 'novo') mudarStatus(o, st); }
-  salvar(); S.edit = null; ir('pedidos', 'pedido', o.id);
+  salvar(); S.edit = null; ir('pedidos', 'pedido', o.id); if (!antigo) comemorar('boa', 'Boa! Pedido ' + o.codigo + ' registrado.');
 }
 function lerMensagem(t) {
   const cod = (/pedido\s+(JF[A-Z0-9]+)/i.exec(t) || [])[1], tot = (/\*?Total:\s*R\$\s*([\d.,]+)/i.exec(t) || [])[1];
@@ -301,7 +322,7 @@ function telaProducao() {
     <div class="carga" role="img" aria-label="Peças com entrega em cada um dos próximos 14 dias">${carga.map(x => `<div class="dia" title="${br(x.d)}: ${x.n} peças"><div class="barra-v"><i style="height:${Math.round(x.n / max * 100)}%" class="${cap && x.n > cap ? 'acima' : ''}"></i>${cap ? `<s style="bottom:${Math.round(cap / max * 100)}%"></s>` : ''}</div><b>${x.n || ''}</b><small>${x.d.slice(8)}</small></div>`).join('')}</div>
     <div class="info">Os números de baixo são os dias do mês, a partir de hoje. A linha tracejada é a sua capacidade por dia, que você ajusta em Ajustes. Barras em vermelho passam da capacidade.</div>
   </div></div>
-  ${fila.length ? Object.keys(porTec).sort().map(t => `<div class="bloco"><header><b>${esc(t)}</b><span>${porTec[t].length} ${porTec[t].length === 1 ? 'pedido' : 'pedidos'}</span></header>${porTec[t].map(linha).join('')}</div>`).join('') : mascote('uau', '<b>Fila vazia.</b><span>Pedidos aguardando pagamento, em arte ou em produção aparecem aqui, separados por técnica e pela data de entrega.</span>')}`;
+  ${fila.length ? Object.keys(porTec).sort().map(t => `<div class="bloco"><header><b>${esc(t)}</b><span>${porTec[t].length} ${porTec[t].length === 1 ? 'pedido' : 'pedidos'}</span></header>${porTec[t].map(linha).join('')}</div>`).join('') : mascote('boa', '<b>Boa! Fila vazia.</b><span>Pedidos aguardando pagamento, em arte ou em produção aparecem aqui, separados por técnica e pela data de entrega.</span>')}`;
 }
 
 /* ---------- CLIENTES ---------- */
@@ -309,7 +330,7 @@ function novoCliente() { return {_tipo:'cliente', _novo:true, id:novoId('c'), no
 function listaClientes() {
   const q = S.busca.toLowerCase(), qd = q.replace(/\D/g, '');
   const l = D.clientes.filter(c => !q || c.nome.toLowerCase().includes(q) || (qd && String(c.whats).includes(qd)) || (c.bairro || '').toLowerCase().includes(q) || (c.etiquetas || '').toLowerCase().includes(q)).sort((a, b) => a.nome.localeCompare(b.nome));
-  return l.length ? `<div class="bloco">${l.map(c => { const ps = pedidosDe(c.id); return `<button class="lin cli" data-act="ver-cliente" data-id="${c.id}"><span><b>${esc(c.nome)}</b><br><small>${esc(fone(c.whats))}${c.bairro ? ' · ' + esc(c.bairro) : ''}${c.etiquetas ? ' · ' + esc(c.etiquetas) : ''}</small></span><span class="dir"><b>${brl(ps.reduce((s, o) => s + totalPedido(o), 0))}</b><br><small>${ps.length} ${ps.length === 1 ? 'pedido' : 'pedidos'}</small></span></button>`; }).join('')}</div>` : mascote('ei', D.clientes.length ? 'Não encontrei ninguém com essa busca.' : '<b>Nenhuma cliente cadastrada.</b><span>Cadastre aqui ou registre um pedido, que eu cadastro junto.</span>');
+  return l.length ? `<div class="bloco">${l.map(c => { const ps = pedidosDe(c.id); return `<button class="lin cli" data-act="ver-cliente" data-id="${c.id}"><span><b>${esc(c.nome)}</b><br><small>${esc(fone(c.whats))}${c.bairro ? ' · ' + esc(c.bairro) : ''}${c.etiquetas ? ' · ' + esc(c.etiquetas) : ''}</small></span><span class="dir"><b>${brl(ps.reduce((s, o) => s + totalPedido(o), 0))}</b><br><small>${ps.length} ${ps.length === 1 ? 'pedido' : 'pedidos'}</small></span></button>`; }).join('')}</div>` : mascote(D.clientes.length ? 'hein' : 'ei', D.clientes.length ? '<b>Hein? Não achei ninguém.</b><span>Tente outra parte do nome, o bairro ou o WhatsApp.</span>' : '<b>Nenhuma cliente cadastrada.</b><span>Cadastre aqui ou registre um pedido, que eu cadastro junto.</span>');
 }
 function telaClientes() { return `<button class="cta" data-act="novo-cliente">+ Cadastrar cliente</button>${campo('Buscar por nome, WhatsApp, bairro ou etiqueta', `<input type="text" id="busca-cli" value="${esc(S.busca)}">`)}<div id="lista-cli">${listaClientes()}</div>`; }
 function telaCliente() {
@@ -323,6 +344,7 @@ function telaCliente() {
   ${c.obs ? `<div><span class="rotulo">Anotações</span><br>${esc(c.obs)}</div>` : ''}
   <div class="acoes">${zap(c, 'Oi, ' + primeiro(c.nome) + '! ', 'Abrir conversa')}<button class="btn" data-act="novo-pedido" data-cli="${c.id}">+ Pedido</button><button class="link" data-act="editar-cliente" data-id="${c.id}">Editar</button>${confirmarBtn('excluir-cliente', c.id, 'Excluir')}</div></div></div>
   <div class="bloco"><header><b>Mensagens prontas</b></header><div class="dentro acoes">${c.aceitaMsg === false ? '<span class="info">Esta cliente pediu para não receber campanhas.</span>' : ['posvenda','reativar'].map(k => zap(c, texto(k, c), D.modelos[k][0], k)).join('')}</div></div>
+  ${pedidosDe(c.id).some(o => o.status === 'entregue') ? kitPosVenda(c, pedidosDe(c.id).filter(o => o.status === 'entregue').sort((a, b) => (a.entregueEm || '') < (b.entregueEm || '') ? 1 : -1)[0]) : ''}
   ${(c.contatos || []).length ? `<div class="bloco"><header><b>Contatos registrados</b></header>${c.contatos.slice(-8).reverse().map(x => `<div class="lin"><span>${br(x.data)}</span><span>${esc((D.modelos[x.modelo] || [x.modelo || 'Conversa'])[0])}</span></div>`).join('')}</div>` : ''}
   <h2 class="sec">Pedidos</h2>${ps.length ? ps.map(cartaoPedido).join('') : '<div class="vazio">Ainda sem pedidos.</div>'}`;
 }
@@ -346,7 +368,7 @@ function salvarCliente() {
   for (const k of ['aniversario', 'dataDia']) if (String(e[k] || '').trim() && proxDDMM(e[k]) === null) return err('Escreva as datas como dia/mês, por exemplo 12/03.');
   const c = {...e, nome:String(e.nome).trim(), whats:String(e.whats || '').replace(/\D/g, '')}; delete c._tipo; delete c._novo;
   const i = D.clientes.findIndex(x => x.id === c.id); if (i >= 0) D.clientes[i] = c; else D.clientes.push(c);
-  salvar(); S.edit = null; ir('clientes', 'cliente', c.id);
+  salvar(); S.edit = null; ir('clientes', 'cliente', c.id); if (i < 0) comemorar('fofo', 'Cliente nova cadastrada!');
 }
 
 /* ---------- PRODUTOS E PREÇO ---------- */
@@ -489,7 +511,7 @@ function converterOrc(o) {
   let c = o.whats && D.clientes.find(x => x.whats === o.whats);
   if (!c) { c = novoCliente(); Object.assign(c, {nome:o.contato ? o.contato + ' (' + o.empresa + ')' : o.empresa, whats:o.whats, origem:'Empresa', etiquetas:'empresa'}); delete c._tipo; delete c._novo; D.clientes.push(c); }
   const p = {id:novoId('p'), codigo:proxCodigo(), cliente:c.id, itens:o.itens.map(i => { const pr = prod(i.produto); return {produto:i.produto, nome:i.nome, qtd:num(i.qtd), preco:num(i.preco), obs:'', custo:pr ? custoProduto(pr) : 0}; }), frete:0, desconto:0, entrega:o.prazo ? somaDias(hoje(), num(o.prazo)) : '', local:'', status:'pagamento', obs:'Orçamento ' + o.codigo + (o.nf ? ' · com nota fiscal' : ''), pagamentos:[], criado:hoje(), check:{}};
-  D.pedidos.push(p); o.pedido = p.id; salvar(); ir('pedidos', 'pedido', p.id);
+  D.pedidos.push(p); o.pedido = p.id; salvar(); ir('pedidos', 'pedido', p.id); comemorar('uau', 'Uau! Orçamento aprovado virou pedido.');
 }
 
 /* ---------- RELATÓRIOS ---------- */
@@ -506,7 +528,7 @@ function telaRelatorios() {
   <div class="bloco"><header><b>Vendas por mês</b><span>pela data do pedido</span></header><div class="dentro">${barras(porMes.map(([m, v]) => [m, v, brl(v)]))}</div></div>
   <div class="bloco"><header><b>Mais vendidos</b><span>por receita</span></header><div class="dentro">${barras(top.map(([k, v]) => [k, v.rec, brl(v.rec) + ' · ' + v.qtd + ' un.']))}</div></div>
   <div class="bloco"><header><b>Margem por produto</b></header><div class="tabela"><table class="tab"><tr><th>Produto</th><th>Receita</th><th>Custo</th><th>Margem</th></tr>${top.map(([k, v]) => { const m = v.rec ? (v.rec * (1 - num(C().taxas) / 100) - v.custo) / v.rec * 100 : 0; return `<tr><td>${esc(k)}</td><td>${brl(v.rec)}</td><td>${brl(v.custo)}</td><td class="${m < num(C().lucro) / 2 ? 'falta' : ''}">${pct(m)}</td></tr>`; }).join('')}</table></div></div>
-  <div class="bloco"><header><b>Como as clientes chegaram</b></header><div class="dentro">${barras(Object.entries(orig).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, v + (v === 1 ? ' cliente' : ' clientes')]))}</div></div>` : mascote('lembra', `<b>Sem pedidos em ${ano}.</b><span>Os relatórios aparecem conforme você registra pedidos.</span>`)}`;
+  <div class="bloco"><header><b>Como as clientes chegaram</b></header><div class="dentro">${barras(Object.entries(orig).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, v + (v === 1 ? ' cliente' : ' clientes')]))}</div></div>` : mascote('ha', `<b>Hã? Sem pedidos em ${ano}.</b><span>Os relatórios aparecem conforme você registra pedidos.</span>`)}`;
 }
 
 /* ---------- AJUSTES ---------- */
@@ -523,8 +545,12 @@ function telaAjustes() {
   </div></div>
   <div class="bloco"><header><b>MEI e contato</b></header><div class="dentro">
     <div class="tres">${campo('Limite anual do MEI', `<input type="text" id="c-lim" value="${numTxt(c.limiteMei)}" inputmode="decimal">`, 'R$')}${campo('Valor do DAS', `<input type="text" id="c-das" value="${numTxt(c.das)}" inputmode="decimal">`, 'R$ por mês')}${campo('Seu WhatsApp', `<input type="text" id="c-whats" value="${esc(fone(c.whats))}" inputmode="tel">`)}</div>
+    ${campo('Link para avaliar a loja no Google', `<input type="text" id="c-google" value="${esc(c.linkGoogle)}" placeholder="https://g.page/r/...">`, 'pegue no seu Perfil da Empresa no Google, em Pedir avaliações')}
   </div></div>
   <div class="erro" id="erro" role="alert"></div><button class="cta" data-act="salvar-ajustes">Guardar ajustes</button>
+  <h2 class="sec">Figurinhas da Jú</h2>
+  <div class="info">Baixe e envie no WhatsApp junto com as mensagens. As figurinhas também aparecem sozinhas na ferramenta quando algo acontece.</div>
+  <div class="galeria">${Object.keys(FIG).map(k => `<div class="gal-it"><img src="img/fig/${k}.webp" alt="${FIG[k]}" loading="lazy">${figBaixar(k, 'Baixar')}</div>`).join('')}</div>
   <h2 class="sec">Datas comerciais</h2>
   <div class="bloco">${D.datas.slice().sort((a, b) => a.data < b.data ? -1 : 1).map(d => `<div class="lin"><span>${esc(d.nome)}</span><span>${br(d.data)} ${confirmarBtn('excluir-data', d.id, 'Remover')}</span></div>`).join('')}
   <div class="dentro"><div class="duas">${campo('Nova data', '<input type="text" id="dt-nome" maxlength="40" placeholder="Dia dos Avós">')}${campo('Dia', `<input type="date" id="dt-dia">`)}</div><button class="btn" data-act="add-data">Incluir data</button></div></div>
@@ -597,13 +623,13 @@ const ACT = {
   'rm-item': el => { S.edit.itens.splice(+el.dataset.n, 1); render(); },
   'salvar-pedido': salvarPedido,
   'cancelar-form': () => { const t = S.edit && S.edit._tipo, id = S.edit && S.edit.id; S.edit = null; if (t === 'pedido' && ped(id)) ir(S.aba, 'pedido', id); else if (t === 'cliente' && cli(id)) ir('clientes', 'cliente', id); else ir(S.aba); },
-  'avancar': el => { const o = ped(el.dataset.id), i = ET.findIndex(e => e[0] === o.status); mudarStatus(o, ET[i + 1][0]); render(); },
-  'pagar': el => { const o = ped(el.dataset.id), v = num($('#pg-valor').value); if (!(v > 0)) { aviso('Informe o valor recebido.'); return; } registrarPagamento(o, v, $('#pg-forma').value, $('#pg-data').value || hoje()); if (o.status === 'pagamento' && saldoPedido(o) === 0) mudarStatus(o, 'arte'); render(); },
+  'avancar': el => { const o = ped(el.dataset.id), i = ET.findIndex(e => e[0] === o.status); mudarStatus(o, ET[i + 1][0]); render(); festaEtapa(o); },
+  'pagar': el => { const o = ped(el.dataset.id), v = num($('#pg-valor').value); if (!(v > 0)) { aviso('Informe o valor recebido.'); return; } registrarPagamento(o, v, $('#pg-forma').value, $('#pg-data').value || hoje()); if (o.status === 'pagamento' && saldoPedido(o) === 0) mudarStatus(o, 'arte'); render(); comemorar('pagamento', saldoPedido(o) === 0 ? 'Pagamento confirmado! Pedido quitado.' : 'Pagamento de ' + brl(v) + ' registrado. Falta ' + brl(saldoPedido(o)) + '.'); },
   'excluir-pag': el => { const [oid, pid] = el.dataset.id.split(':'), o = ped(oid), p = o.pagamentos.find(x => x.id === pid); o.pagamentos = o.pagamentos.filter(x => x.id !== pid); D.lancamentos = D.lancamentos.filter(l => l.id !== p.lanc); salvar(); S.confirmar = null; render(); },
   'excluir-pedido': el => { const o = ped(el.dataset.id); if (o.baixado) baixaInsumos(o, -1); D.lancamentos = D.lancamentos.filter(l => l.pedido !== o.id); D.pedidos = D.pedidos.filter(x => x.id !== o.id); salvar(); ir('pedidos'); },
   'pos-feito': el => { ped(el.dataset.id).posVenda = true; salvar(); render(); },
   'importar': () => { S.imp = ''; ir('pedidos', 'importar'); },
-  'ler-msg': () => { S.imp = $('#imp').value; const e = lerMensagem(S.imp); if (!e) { $('#erro').textContent = 'Não reconheci um pedido do catálogo nessa mensagem. Confira se colou o texto inteiro, ou registre o pedido à mão.'; return; } if (D.pedidos.some(o => o.codigo === e.codigo)) { $('#erro').textContent = 'O pedido ' + e.codigo + ' já foi registrado.'; return; } abrirForm(e); },
+  'ler-msg': () => { S.imp = $('#imp').value; const e = lerMensagem(S.imp); if (!e) { $('#erro').innerHTML = mascote('ha', '<b>Hã? Não reconheci um pedido nessa mensagem.</b><span>Confira se colou o texto inteiro, ou registre o pedido à mão.</span>'); return; } if (D.pedidos.some(o => o.codigo === e.codigo)) { $('#erro').textContent = 'O pedido ' + e.codigo + ' já foi registrado.'; return; } abrirForm(e); },
   'novo-cliente': () => abrirForm(novoCliente()),
   'ver-cliente': el => ir('clientes', 'cliente', el.dataset.id),
   'editar-cliente': el => editar('cliente', cli(el.dataset.id)),
@@ -635,7 +661,7 @@ const ACT = {
   'salvar-orc': salvarOrc,
   'excluir-orc': el => { D.orcamentos = D.orcamentos.filter(o => o.id !== el.dataset.id); salvar(); S.confirmar = null; render(); },
   'converter-orc': el => converterOrc(orc(el.dataset.id)),
-  'salvar-ajustes': () => { const c = C(), v = id => num($(id).value); Object.assign(c, {fixas:v('#c-fixas'), taxas:v('#c-taxas'), lucro:v('#c-lucro'), hora:v('#c-hora'), capacidade:v('#c-cap'), limiteMei:v('#c-lim') || 81000, das:v('#c-das'), whats:$('#c-whats').value.replace(/\D/g, ''), prefixo:($('#c-pref').value.trim() || 'JF').toUpperCase()}); if (c.fixas + c.taxas + c.lucro >= 100) { $('#erro').textContent = 'Despesas, taxas e lucro somam 100% ou mais. Reduza algum deles.'; return; } salvar(); aviso('Ajustes guardados.'); },
+  'salvar-ajustes': () => { const c = C(), v = id => num($(id).value); Object.assign(c, {fixas:v('#c-fixas'), taxas:v('#c-taxas'), lucro:v('#c-lucro'), hora:v('#c-hora'), capacidade:v('#c-cap'), limiteMei:v('#c-lim') || 81000, das:v('#c-das'), whats:$('#c-whats').value.replace(/\D/g, ''), linkGoogle:$('#c-google').value.trim(), prefixo:($('#c-pref').value.trim() || 'JF').toUpperCase()}); if (c.fixas + c.taxas + c.lucro >= 100) { $('#erro').textContent = 'Despesas, taxas e lucro somam 100% ou mais. Reduza algum deles.'; return; } salvar(); aviso('Ajustes guardados.'); },
   'add-data': () => { const n = $('#dt-nome').value.trim(), d = $('#dt-dia').value; if (!n || !d) { aviso('Informe o nome e o dia da data comercial.'); return; } D.datas.push({id:novoId('d'), nome:n, data:d}); salvar(); render(); },
   'excluir-data': el => { D.datas = D.datas.filter(d => d.id !== el.dataset.id); salvar(); S.confirmar = null; render(); },
   'modelo-padrao': el => { D.modelos[el.dataset.k] = MODELOS_PADRAO[el.dataset.k].slice(); salvar(); render(); },
@@ -660,8 +686,8 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
-  if (t.dataset.actChange === 'status') { mudarStatus(ped(t.dataset.id), t.value); render(); }
-  if (t.dataset.actChange === 'check') { const o = ped(t.dataset.id); o.check = o.check || {}; o.check[t.dataset.k] = t.checked; salvar(); }
+  if (t.dataset.actChange === 'status') { const o = ped(t.dataset.id); mudarStatus(o, t.value); render(); festaEtapa(o); }
+  if (t.dataset.actChange === 'check') { const o = ped(t.dataset.id); o.check = o.check || {}; o.check[t.dataset.k] = t.checked; salvar(); if (t.checked && ['arte','separado','produzido','embalado'].every(k => o.check[k])) comemorar('amor', 'Feito com amor! Tudo pronto neste pedido.'); }
   if (t.id === 'restaurar' && t.files[0]) { const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.pedidos) || !d.config) throw 0; D = d; carregar0(); salvar(); ir('hoje'); aviso('Cópia restaurada.'); } catch (e) { aviso('Este arquivo não é uma cópia de segurança da Gestão Jú Festas.'); } }; r.readAsText(t.files[0]); }
 });
 function carregar0() { const b = base(); for (const k of Object.keys(b)) if (D[k] === undefined) D[k] = b[k]; D.config = {...b.config, ...D.config}; }
