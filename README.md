@@ -1,1 +1,44 @@
-# gestao-ju-festas
+# Gestão Jú Festas
+
+Ferramenta de gestão da Jú Festas e Presentes, para presentes personalizados. Funciona no navegador do computador ou do celular, sem instalação e sem mensalidade.
+
+## Módulos
+
+| Módulo | O que faz |
+| --- | --- |
+| Hoje | Resumo do dia: pedidos em aberto, valor a receber, entregas da semana, campanhas de datas comerciais, insumos em falta, pós-venda e datas das clientes |
+| Pedidos | Etapas de Novo a Entregue, itens com personalização, sinal e pagamentos, lucro estimado pela ficha técnica e importação da mensagem que chega do catálogo |
+| Produção | Fila por técnica (sublimação, DTF UV, recorte na Silhouette, montagem), checklist de cada pedido e peças por dia contra a capacidade |
+| Clientes | Cadastro, etiquetas, datas importantes, autorização de foto, histórico de pedidos e de mensagens |
+| Produtos e preço | Ficha técnica com insumos, embalagem e tempo; preço sugerido pelo markup divisor e margem de cada produto |
+| Insumos | Estoque com mínimo, baixa automática quando o pedido entra em produção, lista de compras e registro de compra |
+| Financeiro | Entradas e saídas por mês, saídas por categoria, lembrete do DAS e faturamento do ano contra o limite do MEI |
+| Empresas | Orçamentos com validade, prazo e nota fiscal, envio pelo WhatsApp e conversão em pedido |
+| Relatórios | Vendas por mês, mais vendidos, margem por produto, ticket médio, recompra e origem das clientes |
+| Ajustes | Percentuais do markup, valor da hora, capacidade, MEI, datas comerciais, modelos de mensagem e cópia de segurança |
+
+## Onde ficam os dados
+
+Os dados ficam guardados **no navegador de quem usa** (armazenamento local). Isso significa:
+
+- Nenhum dado de cliente vai para o GitHub nem fica visível para quem abrir o endereço do site.
+- O que você cadastra no computador não aparece no celular, e vice-versa.
+- Limpar os dados do navegador apaga tudo.
+
+Por isso, em **Ajustes > Cópia de segurança**, baixe uma cópia toda semana e guarde no Google Drive ou no computador. Para usar em outro aparelho, abra o site nele e use **Restaurar cópia**.
+
+## Como publicar no GitHub Pages
+
+1. No repositório, abra **Settings > Pages**.
+2. Em **Source**, escolha **Deploy from a branch**, a branch `main` e a pasta `/ (root)`.
+3. Salve. Em alguns minutos o site fica em `https://<conta>.github.io/<repositório>/`.
+
+No celular, abra o endereço e use **Adicionar à tela inicial** para usar como aplicativo.
+
+## Arquivos
+
+- `index.html`: a página
+- `app.js`: toda a lógica
+- `styles.css`: o visual, com a identidade da marca
+- `img/`: logo e mascote oficiais
+- `manifest.json`: permite instalar na tela inicial do celular
