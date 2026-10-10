@@ -226,3 +226,5 @@ label.campo{min-width:0}
 
 .mudou{margin-top:12px;background:#FFF1F3;border:1.5px solid var(--rosa-blush);border-radius:14px;padding:12px 14px;font-family:var(--sans);font-size:13.5px;line-height:1.45}
 .mudou b{color:var(--rosa-forte)}
+.nf-sebrae{background:var(--fundo);border:1.5px solid var(--borda);border-radius:12px;padding:10px 14px;font-family:var(--sans);font-size:13.5px;display:grid;gap:8px}
+.nf-sebrae ol{margin:0;padding-left:20px;display:grid;gap:4px}

@@ -24,7 +24,7 @@ Ferramenta de gestão da Jú Festas e Presentes, para presentes personalizados. 
 Cada pedido tem um bloco **Nota fiscal**. Ele marca sozinho quando a nota é obrigatória (cliente com CNPJ, ou orçamento de empresa com nota) e deixa você ligar a nota em qualquer outro pedido.
 
 1. **Copiar dados da nota** junta cliente, CPF ou CNPJ, endereço, itens com NCM, frete, total, CFOP e regime.
-2. **Abrir o emissor** leva ao portal oficial: Receita/PR (NF-e avulsa, para produtos) ou Emissor Nacional (NFS-e, para serviços).
+2. **Abrir o emissor** leva ao Emissor de NF-e do Sebrae (emissornfe.sebrae.com.br, gratuito, com a Conta Sebrae e certificado digital A1 ou A3). Em Ajustes dá para trocar pela nota avulsa da Receita/PR ou pelo Emissor Nacional de NFS-e. Ajustes também gera as planilhas de clientes e produtos para importar no emissor do Sebrae.
 3. Depois de emitir, anote o número e a data. A nota aparece em **Hoje**, no **Financeiro** e na planilha de pedidos.
 
 Em **Ajustes > Nota fiscal** ficam o tipo de nota mais comum, o CFOP padrão, um link de emissor próprio e a opção de emitir nota em todas as vendas (para usar a partir de 2027, quando a lei prevê nota em toda venda do MEI). NCM e CFOP são sugestões: confirme com o seu contador.

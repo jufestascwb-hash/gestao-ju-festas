@@ -59,7 +59,7 @@ function proxDDMM(ddmm) { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(String(ddmm ||
 /* ---------- dados ---------- */
 function base() {
   return {v:1, exemplo:false, criado:new Date().toISOString(),
-    config:{nomeLoja:'Jú Festas e Presentes', whats:'', linkGoogle:'', fixas:15, taxas:5, lucro:30, hora:25, capacidade:20, das:0, limiteMei:81000, prefixo:'JF', nfTipo:'produto', nfLink:'', nfCfop:'5101', nfTodas:false},
+    config:{nomeLoja:'Jú Festas e Presentes', whats:'', linkGoogle:'', fixas:15, taxas:5, lucro:30, hora:25, capacidade:20, das:0, limiteMei:81000, prefixo:'JF', nfTipo:'produto', nfEmissor:'sebrae', nfLink:'', nfCfop:'5101', nfTodas:false},
     modelos:JSON.parse(JSON.stringify(MODELOS_PADRAO)), datas:DATAS_PADRAO.map(d => ({...d})),
     produtos:[], insumos:[], clientes:[], pedidos:[], lancamentos:[], orcamentos:[]};
 }
@@ -133,9 +133,11 @@ function zap(c, t, rot, k) {
 
 /* ---------- NOTA FISCAL (MEI) ---------- */
 const EMISSORES = {
-  produto:['Nota de produto (NF-e avulsa) na Receita/PR', 'https://receita.pr.gov.br/', 'Entre com o seu login da Receita/PR e vá em Nota Fiscal Avulsa Eletrônica (NFA-e). Não precisa de certificado digital.'],
-  servico:['Nota de serviço (NFS-e) no Emissor Nacional', 'https://www.nfse.gov.br/EmissorNacional', 'Entre com a conta gov.br. Também dá para emitir pelo aplicativo NFS-e Mobile.']
+  sebrae:['Emissor de NF-e do Sebrae', 'https://emissornfe.sebrae.com.br/', 'Entre com a sua Conta Sebrae. Nota de produto: Emissor fiscal > Emissão de NF-e > Adicionar novo. Nota de serviço: emissão de NFS-e no mesmo emissor.'],
+  receita:['Nota avulsa (NFA-e) na Receita/PR', 'https://receita.pr.gov.br/', 'Entre com o seu login da Receita/PR e vá em Nota Fiscal Avulsa Eletrônica (NFA-e). Não precisa de certificado digital.'],
+  nacional:['Emissor Nacional de NFS-e', 'https://www.nfse.gov.br/EmissorNacional', 'Entre com a conta gov.br. Também dá para emitir pelo aplicativo NFS-e Mobile.']
 };
+const EMISSOR_NOMES = [['sebrae','Emissor de NF-e do Sebrae (recomendado)'],['receita','Nota avulsa da Receita/PR (produto)'],['nacional','Emissor Nacional (serviço)']];
 const docLimpo = d => String(d || '').replace(/\D/g, '');
 const docTxt = d => { const x = docLimpo(d); return x.length === 11 ? x.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : x.length === 14 ? x.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : String(d || ''); };
 const ehPJ = c => !!c && docLimpo(c.doc).length === 14;
@@ -146,12 +148,12 @@ function nfDe(o) {
 }
 const nfPronta = o => o.status !== 'cancelado' && (saldoPedido(o) === 0 || o.status === 'entregue');
 const nfPendente = o => { const n = nfDe(o); return o.status !== 'cancelado' && n.precisa && n.status === 'pendente'; };
-const emissor = tipo => [EMISSORES[tipo] ? EMISSORES[tipo][0] : EMISSORES.produto[0], (C().nfLink || '').trim() || (EMISSORES[tipo] || EMISSORES.produto)[1], (EMISSORES[tipo] || EMISSORES.produto)[2]];
+const emissor = tipo => { let k = C().nfEmissor || 'sebrae'; if (k === 'receita' && tipo === 'servico') k = 'nacional'; if (k === 'nacional' && tipo !== 'servico') k = 'receita'; const e = EMISSORES[k] || EMISSORES.sebrae; return [e[0], (C().nfLink || '').trim() || e[1], e[2], k]; };
 function dadosNF(o) {
   const c = cli(o.cliente) || {}, n = nfDe(o), cf = String(C().nfCfop || '5101'), fora = cf.replace(/^5/, '6');
   const itens = (o.itens || []).map((it, k) => { const p = prod(it.produto) || {}; return `${k + 1}. ${it.nome || p.nome || 'item'}${p.ncm ? ' · NCM ' + p.ncm : ''} · ${numTxt(num(it.qtd)) || 1} un. × ${brl(num(it.preco))} = ${brl(num(it.qtd) * num(it.preco))}`; }).join('\n');
   const L = [`DADOS PARA A NOTA FISCAL · pedido ${o.codigo}`, '',
-    `Cliente: ${c.nome || '(cadastre a cliente)'}`, `${ehPJ(c) ? 'CNPJ' : 'CPF/CNPJ'}: ${docTxt(c.doc) || '(falta informar)'}`, `Endereço: ${c.endereco || '(falta informar)'}`, '',
+    `Cliente: ${c.nome || '(cadastre a cliente)'} · ${ehPJ(c) ? 'Pessoa jurídica' : 'Pessoa física'}`, `${ehPJ(c) ? 'CNPJ' : 'CPF/CNPJ'}: ${docTxt(c.doc) || '(falta informar)'}`, `Indicador da IE: ${ehPJ(c) && String(c.ie || '').trim() ? 'Contribuinte do ICMS · IE ' + c.ie : 'Não contribuinte'}`, `CEP: ${c.cep || '(falta informar)'}`, `Endereço: ${c.endereco || '(falta informar)'}`, '',
     n.tipo === 'servico' ? 'Serviço prestado:' : 'Produtos:', itens];
   if (num(o.frete)) L.push(`Frete: ${brl(o.frete)}`);
   if (num(o.desconto)) L.push(`Desconto: ${brl(o.desconto)}`);
@@ -163,14 +165,14 @@ function dadosNF(o) {
 }
 function blocoNF(o) {
   const n = nfDe(o), c = cli(o.cliente), [nome, link, dica] = emissor(n.tipo), falta = [];
-  if (n.precisa && n.status === 'pendente') { if (!c || !docLimpo(c.doc)) falta.push('CPF ou CNPJ da cliente'); if (!c || !String(c.endereco || '').trim()) falta.push('endereço da cliente'); }
+  if (n.precisa && n.status === 'pendente') { if (!c || !docLimpo(c.doc)) falta.push('CPF ou CNPJ da cliente'); if (!c || !String(c.endereco || '').trim()) falta.push('endereço da cliente'); if (c && !String(c.cep || '').trim()) falta.push('CEP'); }
   const porque = ehPJ(c) ? 'Cliente empresa (CNPJ): a nota é obrigatória.' : C().nfTodas ? 'Você marcou em Ajustes para emitir nota em todas as vendas.' : 'Cliente pessoa física: em 2026 a nota é emitida quando ela pede. A partir de 2027, a lei prevê nota em todas as vendas do MEI.';
   const tag = !n.precisa ? '<span class="tag">sem nota</span>' : n.status === 'emitida' ? '<span class="tag ok">emitida</span>' : n.status === 'dispensada' ? '<span class="tag">dispensada</span>' : `<span class="tag ${nfPronta(o) ? 'alerta' : ''}">${nfPronta(o) ? 'emitir agora' : 'emitir após o pagamento'}</span>`;
   let corpo = `<label class="opc"><span>Emitir nota fiscal para este pedido</span><input type="checkbox" data-act-change="nf-precisa" data-id="${o.id}" ${n.precisa ? 'checked' : ''}></label><div class="info">${porque}</div>`;
   if (n.precisa && n.status === 'pendente') corpo += `
     <div class="duas">${campo('Tipo de nota', `<select data-act-change="nf-tipo" data-id="${o.id}">${opts([['produto','Produto (NF-e)'],['servico','Serviço (NFS-e)']], n.tipo)}</select>`)}<div class="info" style="align-self:end">${esc(dica)}</div></div>
     ${falta.length ? `<div class="alerta-nf">Falta ${falta.join(' e ')}. ${c ? `<button class="link" data-act="editar-cliente" data-id="${c.id}">Completar cadastro</button>` : ''}</div>` : ''}
-    <div class="nf-passos"><b>1.</b> Copie os dados <b>2.</b> Abra o emissor e preencha <b>3.</b> Anote o número aqui</div>
+    <div class="nf-passos"><b>1.</b> Copie os dados <b>2.</b> ${emissor(n.tipo)[3] === 'sebrae' ? (n.tipo === 'servico' ? 'No Sebrae, abra a emissão de NFS-e' : 'No Sebrae: Emissor fiscal &gt; Emissão de NF-e &gt; Adicionar novo') : 'Abra o emissor e preencha'} <b>3.</b> Anote o número aqui</div>
     <div class="acoes"><button class="btn" data-act="nf-copiar" data-id="${o.id}">Copiar dados da nota</button><a class="btn forte" href="${esc(link)}" target="_blank" rel="noopener">Abrir: ${esc(nome)}</a></div>
     <details class="nf-ver"><summary>Ver os dados</summary><pre>${esc(dadosNF(o))}</pre></details>
     <div class="tres">${campo('Número da nota', `<input type="text" id="nf-num" inputmode="numeric" maxlength="20">`)}${campo('Data de emissão', `<input type="date" id="nf-data" value="${hoje()}">`)}<button class="btn forte" data-act="nf-emitida" data-id="${o.id}" style="align-self:end">Marcar como emitida</button></div>
@@ -407,6 +409,7 @@ function formCliente() {
   ${campo('Nome', inp('nome', e.nome, 'maxlength="60"'))}
   <div class="duas">${campo('WhatsApp', inp('whats', fone(e.whats), 'inputmode="tel"'), 'com DDD')}${campo('Como chegou', `<select data-f="origem">${opts(ORIGENS, e.origem)}</select>`)}</div>
   <div class="duas">${campo('Bairro ou cidade', inp('bairro', e.bairro, 'maxlength="40"'))}${campo('Etiquetas', inp('etiquetas', e.etiquetas, 'maxlength="80"'), 'separe por vírgula: noiva, empresa')}</div>
+  <div class="tres">${campo('CEP', inp('cep', e.cep, 'inputmode="numeric" maxlength="9" placeholder="81000-000"'), 'o emissor do Sebrae busca o endereço pelo CEP')}${campo('Inscrição estadual', inp('ie', e.ie, 'maxlength="20"'), 'só empresa contribuinte de ICMS')}</div>
   <div class="duas">${campo('CPF ou CNPJ', inp('doc', docTxt(e.doc), 'inputmode="numeric" maxlength="18"'), 'para a nota fiscal')}${campo('Endereço', inp('endereco', e.endereco, 'maxlength="140"'), 'entrega e nota fiscal')}</div>
   <div class="tres">${campo('Aniversário', inp('aniversario', e.aniversario, 'maxlength="5" placeholder="12/03" inputmode="numeric"'), 'dd/mm')}${campo('Outra data', inp('dataRotulo', e.dataRotulo, 'maxlength="30" placeholder="aniversário da filha"'))}${campo('Dia', inp('dataDia', e.dataDia, 'maxlength="5" inputmode="numeric"'), 'dd/mm')}</div>
   <label class="opc"><span>Autoriza mostrar o produto pronto no Instagram</span><input type="checkbox" data-f="autorizaFoto" ${e.autorizaFoto ? 'checked' : ''}></label>
@@ -604,7 +607,9 @@ function telaAjustes() {
   </div></div>
   <div class="bloco"><header><b>Nota fiscal</b></header><div class="dentro">
     <div class="duas">${campo('Tipo de nota mais comum', `<select id="c-nftipo">${opts([['produto','Produto (NF-e)'],['servico','Serviço (NFS-e)']], c.nfTipo)}</select>`)}${campo('CFOP padrão', `<input type="text" id="c-cfop" value="${esc(c.nfCfop)}" maxlength="4" inputmode="numeric">`, 'venda de produção própria: 5101')}</div>
-    ${campo('Link do emissor', `<input type="text" id="c-nflink" value="${esc(c.nfLink)}" placeholder="${esc(EMISSORES[c.nfTipo || 'produto'][1])}">`, 'deixe em branco para usar o portal oficial')}
+    ${campo('Onde você emite', `<select id="c-nfemissor">${opts(EMISSOR_NOMES, c.nfEmissor || 'sebrae')}</select>`)}
+    ${(c.nfEmissor || 'sebrae') === 'sebrae' ? `<div class="nf-sebrae"><b>Antes da primeira nota no emissor do Sebrae</b><ol><li>Entre em <a class="link" target="_blank" rel="noopener" href="https://emissornfe.sebrae.com.br/">emissornfe.sebrae.com.br</a> com a sua Conta Sebrae e preencha os dados da empresa.</li><li>Tenha o certificado digital A1 ou A3 com o CNPJ da Jú Festas e o credenciamento para emitir NF-e na Receita/PR.</li><li>No emissor, ligue a NF-e em Ajustes &gt; NF-e e informe a série e o próximo número.</li><li>Leve clientes e produtos de uma vez: baixe as planilhas abaixo e copie as colunas para os modelos de importação do Sebrae (Cadastros &gt; Clientes ou Produtos &gt; Importar).</li></ol><div class="acoes"><button class="btn" data-act="nf-planilha" data-k="clientes">Baixar planilha de clientes</button><button class="btn" data-act="nf-planilha" data-k="produtos">Baixar planilha de produtos</button></div></div>` : ''}
+    ${campo('Link do emissor', `<input type="text" id="c-nflink" value="${esc(c.nfLink)}" placeholder="${esc((EMISSORES[c.nfEmissor || 'sebrae'] || EMISSORES.sebrae)[1])}">`, 'deixe em branco para usar o endereço oficial')}
     <label class="opc"><span>Emitir nota em todas as vendas</span><input type="checkbox" id="c-nftodas" ${c.nfTodas ? 'checked' : ''}></label>
     <div class="info">Hoje a nota é obrigatória na venda para empresa (CNPJ) e quando a cliente pede. A partir de 1º de janeiro de 2027, a lei prevê nota em todas as vendas do MEI: quando chegar a data, marque a opção acima. Os códigos fiscais (NCM, CFOP) são sugestões; confirme com seu contador.</div>
   </div></div>
@@ -643,7 +648,7 @@ function carregarExemplos() {
   P('p-kit','Kit fim de ano para equipe','empresas','Sublimação',89.9,30,2,[['i-caneca',1],['i-papel',1],['i-caixa',1],['i-choc',1]],30);
   const Cl = (id, nome, whats, bairro, origem, aniversario, etiquetas) => D.clientes.push({id, nome:nome + ' (exemplo)', whats, bairro, endereco:'', origem, etiquetas, aniversario, dataRotulo:'', dataDia:'', obs:'', autorizaFoto:true, aceitaMsg:true, contatos:[], criado:hoje()});
   const h = hoje(), aniv = brCurto(somaDias(h, 12));
-  Cl('c1','Ana','41900000001','Boqueirão','Instagram',aniv,'mãe'); D.clientes.push({id:'c4', nome:'Empresa exemplo Ltda.', whats:'41900000009', doc:'11222333000181', bairro:'Centro', endereco:'Rua Exemplo, 100, Centro, Curitiba/PR', origem:'Empresa', etiquetas:'empresa', aniversario:'', dataRotulo:'', dataDia:'', obs:'', autorizaFoto:false, aceitaMsg:true, contatos:[], criado:hoje()}); Cl('c2','Bruna','41900000002','Hauer','Indicação','','noiva'); Cl('c3','Carla','41900000003','São José dos Pinhais','Catálogo','','');
+  Cl('c1','Ana','41900000001','Boqueirão','Instagram',aniv,'mãe'); D.clientes.push({id:'c4', nome:'Empresa exemplo Ltda.', whats:'41900000009', doc:'11222333000181', cep:'80010-000', bairro:'Centro', endereco:'Rua Exemplo, 100, Centro, Curitiba/PR', origem:'Empresa', etiquetas:'empresa', aniversario:'', dataRotulo:'', dataDia:'', obs:'', autorizaFoto:false, aceitaMsg:true, contatos:[], criado:hoje()}); Cl('c2','Bruna','41900000002','Hauer','Indicação','','noiva'); Cl('c3','Carla','41900000003','São José dos Pinhais','Catálogo','','');
   const Pd = (id, cod, cliente, itens, status, entrega, pago, criado, extra) => { const o = {id, codigo:cod, cliente, itens:itens.map(([p, q]) => { const pr = prod(p); return {produto:p, nome:pr.nome, qtd:q, preco:pr.preco, obs:'', custo:custoProduto(pr)}; }), frete:15, desconto:0, entrega, local:'Entrega', status:'novo', obs:'', pagamentos:[], criado, check:{}, ...extra}; D.pedidos.push(o); if (pago) registrarPagamento(o, pago === 'tudo' ? totalPedido(o) : pago, 'Pix', criado); if (status !== 'novo') { if (['producao','pronto','entregue'].includes(status)) mudarStatus(o, 'producao'); mudarStatus(o, status); } return o; };
   Pd('e1','JF0001','c1',[['p-box',1]],'producao',somaDias(h, 2),'tudo',somaDias(h, -3),{check:{arte:true, separado:true}});
   Pd('e2','JF0002','c2',[['p-padrinho',6]],'arte',somaDias(h, 6),150,somaDias(h, -2));
@@ -689,6 +694,13 @@ const ACT = {
   'pagar': el => { const o = ped(el.dataset.id), v = num($('#pg-valor').value); if (!(v > 0)) { aviso('Informe o valor recebido.'); return; } registrarPagamento(o, v, $('#pg-forma').value, $('#pg-data').value || hoje()); if (o.status === 'pagamento' && saldoPedido(o) === 0) mudarStatus(o, 'arte'); render(); comemorar('pagamento', saldoPedido(o) === 0 ? 'Pagamento confirmado! Pedido quitado.' : 'Pagamento de ' + brl(v) + ' registrado. Falta ' + brl(saldoPedido(o)) + '.'); },
   'excluir-pag': el => { const [oid, pid] = el.dataset.id.split(':'), o = ped(oid), p = o.pagamentos.find(x => x.id === pid); o.pagamentos = o.pagamentos.filter(x => x.id !== pid); D.lancamentos = D.lancamentos.filter(l => l.id !== p.lanc); salvar(); S.confirmar = null; render(); },
   'excluir-pedido': el => { const o = ped(el.dataset.id); if (o.baixado) baixaInsumos(o, -1); D.lancamentos = D.lancamentos.filter(l => l.pedido !== o.id); D.pedidos = D.pedidos.filter(x => x.id !== o.id); salvar(); ir('pedidos'); },
+  'nf-planilha': el => {
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', k = el.dataset.k;
+    let linhas;
+    if (k === 'clientes') linhas = [['Tipo de pessoa','Nome ou razão social','CPF ou CNPJ','Indicador da IE','Inscrição estadual','CEP','Endereço','Telefone']].concat(D.clientes.map(c => [ehPJ(c) ? 'Jurídica' : 'Física', c.nome, docLimpo(c.doc), ehPJ(c) && String(c.ie || '').trim() ? 'Contribuinte do ICMS' : 'Não contribuinte', ehPJ(c) ? String(c.ie || '').trim() : '', String(c.cep || '').replace(/\D/g, ''), c.endereco || '', String(c.whats || '').replace(/\D/g, '')]));
+    else linhas = [['Nome','Unidade','Valor','NCM','Origem']].concat(D.produtos.filter(p => p.ativo !== false).map(p => [p.nome, 'UN', String(num(p.preco).toFixed(2)).replace('.', ','), String(p.ncm || '').replace(/\D/g, ''), '0']));
+    baixar(k + '-para-o-sebrae-' + hoje() + '.csv', 'text/csv;charset=utf-8', '\ufeff' + linhas.map(l => l.map(q).join(';')).join('\n'));
+  },
   'nf-copiar': el => { const t = dadosNF(ped(el.dataset.id)); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { el.textContent = 'Dados copiados'; }).catch(() => aviso('Não consegui copiar. Abra "Ver os dados" e copie à mão.')); },
   'nf-emitida': el => { const o = ped(el.dataset.id), nn = $('#nf-num').value.trim(); if (!nn) { aviso('Informe o número da nota emitida.'); return; } o.nf = {...nfDe(o), precisa:true, status:'emitida', numero:nn, data:$('#nf-data').value || hoje()}; delete o.nf.auto; salvar(); render(); comemorar('boa', 'Boa! Nota ' + nn + ' registrada.'); },
   'nf-dispensar': el => { const o = ped(el.dataset.id); o.nf = {...nfDe(o), status:'dispensada'}; delete o.nf.auto; salvar(); render(); },
@@ -727,7 +739,7 @@ const ACT = {
   'salvar-orc': salvarOrc,
   'excluir-orc': el => { D.orcamentos = D.orcamentos.filter(o => o.id !== el.dataset.id); salvar(); S.confirmar = null; render(); },
   'converter-orc': el => converterOrc(orc(el.dataset.id)),
-  'salvar-ajustes': () => { const c = C(), v = id => num($(id).value); Object.assign(c, {fixas:v('#c-fixas'), taxas:v('#c-taxas'), lucro:v('#c-lucro'), hora:v('#c-hora'), capacidade:v('#c-cap'), limiteMei:v('#c-lim') || 81000, das:v('#c-das'), whats:$('#c-whats').value.replace(/\D/g, ''), linkGoogle:$('#c-google').value.trim(), prefixo:($('#c-pref').value.trim() || 'JF').toUpperCase(), nfTipo:$('#c-nftipo').value, nfCfop:$('#c-cfop').value.replace(/\D/g, '') || '5101', nfLink:$('#c-nflink').value.trim(), nfTodas:$('#c-nftodas').checked}); if (c.fixas + c.taxas + c.lucro >= 100) { $('#erro').textContent = 'Despesas, taxas e lucro somam 100% ou mais. Reduza algum deles.'; return; } salvar(); aviso('Ajustes guardados.'); },
+  'salvar-ajustes': () => { const c = C(), v = id => num($(id).value); Object.assign(c, {fixas:v('#c-fixas'), taxas:v('#c-taxas'), lucro:v('#c-lucro'), hora:v('#c-hora'), capacidade:v('#c-cap'), limiteMei:v('#c-lim') || 81000, das:v('#c-das'), whats:$('#c-whats').value.replace(/\D/g, ''), linkGoogle:$('#c-google').value.trim(), prefixo:($('#c-pref').value.trim() || 'JF').toUpperCase(), nfTipo:$('#c-nftipo').value, nfEmissor:$('#c-nfemissor').value, nfCfop:$('#c-cfop').value.replace(/\D/g, '') || '5101', nfLink:$('#c-nflink').value.trim(), nfTodas:$('#c-nftodas').checked}); if (c.fixas + c.taxas + c.lucro >= 100) { $('#erro').textContent = 'Despesas, taxas e lucro somam 100% ou mais. Reduza algum deles.'; return; } salvar(); aviso('Ajustes guardados.'); },
   'add-data': () => { const n = $('#dt-nome').value.trim(), d = $('#dt-dia').value; if (!n || !d) { aviso('Informe o nome e o dia da data comercial.'); return; } D.datas.push({id:novoId('d'), nome:n, data:d}); salvar(); render(); },
   'excluir-data': el => { D.datas = D.datas.filter(d => d.id !== el.dataset.id); salvar(); S.confirmar = null; render(); },
   'modelo-padrao': el => { D.modelos[el.dataset.k] = MODELOS_PADRAO[el.dataset.k].slice(); salvar(); render(); },
