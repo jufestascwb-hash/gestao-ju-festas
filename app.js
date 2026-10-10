@@ -195,7 +195,7 @@ function casca() {
     <button class="btn" data-act="novo-pedido">+ Pedido</button>
   </div>
   <nav class="abas wrap" aria-label="Módulos">${ABAS.map(a => `<button class="aba" data-act="aba" data-aba="${a[0]}">${a[1]}</button>`).join('')}</nav></header>
-  <div class="wrap"><div class="aviso" id="aviso" role="status" hidden></div><main id="app"></main><footer class="rodape"><img src="img/laco.webp" alt=""><span class="script">Feito com amor, para você celebrar!</span><small>Jú Festas e Presentes · dados guardados neste navegador</small></footer></div>`;
+  <div class="wrap">${/github\.io$/.test(location.hostname) ? '<div class="mudou"><b>A gestão mudou de casa.</b> Agora ela fica numa página só no Claude, com os dados guardados na sua conta e envio pelo WhatsApp Business. Para levar o que você cadastrou aqui: Ajustes &gt; Baixar cópia de segurança, e lá use Restaurar cópia.</div>' : ''}<div class="aviso" id="aviso" role="status" hidden></div><main id="app"></main><footer class="rodape"><img src="img/laco.webp" alt=""><span class="script">Feito com amor, para você celebrar!</span><small>Jú Festas e Presentes · dados guardados neste navegador</small></footer></div>`;
   app = $('#app');
 }
 function marcaAbas() { document.querySelectorAll('.aba').forEach(b => b.setAttribute('aria-current', b.dataset.aba === S.aba ? 'page' : 'false')); }

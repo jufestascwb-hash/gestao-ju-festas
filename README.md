@@ -1,5 +1,7 @@
 # Gestão Jú Festas
 
+> **A ferramenta em uso agora é a página da gestão no Claude**, com os dados guardados na conta e envio pelo WhatsApp Business. Este repositório guarda o código-fonte. Para levar dados cadastrados aqui: Ajustes > Baixar cópia de segurança, e na página do Claude use Restaurar cópia.
+
 Ferramenta de gestão da Jú Festas e Presentes, para presentes personalizados. Funciona no navegador do computador ou do celular, sem instalação e sem mensalidade.
 
 ## Módulos

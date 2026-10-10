@@ -204,3 +204,25 @@ h2.sec::before{content:"";width:26px;height:26px;flex:none;background:url(img/la
   .abas{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
   .aba{text-align:center}
 }
+
+/* filtros e tabelas sem itens escondidos em telas pequenas */
+.linha{flex-wrap:wrap;overflow:visible;margin-inline:0;padding-inline:0}
+.linha .chip{white-space:normal}
+.vtopo{flex-wrap:wrap}
+.campo select,.campo input{max-width:100%;min-width:0}
+label.campo{min-width:0}
+@media(max-width:560px){
+  .linha .chip{font-size:12.5px;padding:6px 10px}
+  .tabela{overflow-x:visible}
+  table.tab{font-size:12.5px}
+  .tab td,.tab th{padding:7px 6px;white-space:normal!important}
+  .tab td:first-child{min-width:0}
+  .tab th{font-size:10.5px;letter-spacing:0}
+  table.tab{table-layout:fixed}
+  .tab td,.tab th{overflow-wrap:anywhere}
+  .tab td:first-child,.tab th:first-child{width:32%}
+  .formula{font-size:13.5px;overflow-wrap:anywhere}
+}
+
+.mudou{margin-top:12px;background:#FFF1F3;border:1.5px solid var(--rosa-blush);border-radius:14px;padding:12px 14px;font-family:var(--sans);font-size:13.5px;line-height:1.45}
+.mudou b{color:var(--rosa-forte)}
